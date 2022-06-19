@@ -1,6 +1,7 @@
 ﻿using TeachersTimetable.Config;
 using Telegram.BotAPI;
 using Telegram.BotAPI.AvailableMethods;
+using Telegram.BotAPI.AvailableMethods.FormattingOptions;
 using Telegram.BotAPI.GettingUpdates;
 
 namespace TeachersTimetable.Services
@@ -61,7 +62,7 @@ namespace TeachersTimetable.Services
                     var bot = new BotClient(config.Entries.Token);
                     try
                     {
-                        await bot.SendMessageAsync(update.Message.From!.Id, $"Для оформления подписки на преподавателя отправьте его фамилию ответом на это сообщение");
+                        await bot.SendMessageAsync(update.Message.From!.Id, $"Для оформления подписки на преподавателя отправьте его фамилию *ОТВЕТОМ* на это сообщение", parseMode: ParseMode.Markdown);
                     }
                     catch (Exception e)
                     {
