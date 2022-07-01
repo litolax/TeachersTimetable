@@ -71,7 +71,7 @@ public class ParserService : IParserService
         {
             var teachersAndLessons = new Dictionary<string, List<Lesson>>();
             var t = table.SelectNodes("./tbody/tr");
-            for (int i = 0; i < t.Count; i++)
+            for (int i = 3; i < t.Count; i++)
             {
                 List<Lesson> lessons = new List<Lesson>();
                 int number = 1;
@@ -192,7 +192,7 @@ public class ParserService : IParserService
         if (!dbTables.Exists(table => table.Date.Trim() == newDate.InnerText.Trim()))
         {
             await dateDbCollection.InsertOneAsync(new Timetable() {Date = newDate.InnerText.Trim()});
-            await this.SendNotificaionsAboutWeekTimetable();
+            await this.SendNotificationsAboutWeekTimetable();
         }
     }
 
@@ -213,7 +213,11 @@ public class ParserService : IParserService
                 foreach (var dictionary in timetable.Table)
                 {
                     dictionary.TryGetValue(user.Teacher, out var lessons);
-                    if (lessons is null) continue;
+                    if (lessons is null)
+                    {
+                        message = $"У преподавателя {user.Teacher} нет пар на {timetable.Date}";
+                        continue;
+                    }
                     message += $"Преподаватель: {user.Teacher}\n";
                     foreach (var lesson in lessons)
                     {
@@ -263,7 +267,11 @@ public class ParserService : IParserService
             foreach (var dictionary in timetable.Table)
             {
                 dictionary.TryGetValue(user.Teacher, out var lessons);
-                if (lessons is null) continue;
+                if (lessons is null)
+                {
+                    message = $"У преподавателя {user.Teacher} нет пар на {timetable.Date}";
+                    continue;
+                }
                 message += $"Преподаватель: {user.Teacher}\n";
                 foreach (var lesson in lessons)
                 {
@@ -323,7 +331,7 @@ public class ParserService : IParserService
         }
     }
     
-    public async Task SendNotificaionsAboutWeekTimetable()
+    public async Task SendNotificationsAboutWeekTimetable()
     {
         var config = new Config<MainConfig>();
         var bot = new BotClient(config.Entries.Token);
