@@ -11,7 +11,7 @@ namespace TeachersTimetable.Services
     public interface IAccountService
     {
         Task<Models.User?> CreateAccount(User telegramUser);
-        Task ChangeTeacher(User telegramUser, string teacher);
+        Task<bool> ChangeTeacher(User telegramUser, string? teacher);
         Task SubscribeNotifications(User telegramUser);
         Task UnSubscribeNotifications(User telegramUser);
     }
@@ -42,8 +42,9 @@ namespace TeachersTimetable.Services
             return user;
         }
 
-        public async Task ChangeTeacher(User telegramUser, string teacherName)
+        public async Task<bool> ChangeTeacher(User telegramUser, string? teacherName)
         {
+            if (teacherName is null) return false;
             var config = new Config<MainConfig>();
             var bot = new BotClient(config.Entries.Token);
             
@@ -60,7 +61,7 @@ namespace TeachersTimetable.Services
                 try
                 {
                     await bot.SendMessageAsync(telegramUser.Id, $"Преподаватель не найден");
-                    return;
+                    return false;
                 }
                 catch (Exception e)
                 {
@@ -74,7 +75,7 @@ namespace TeachersTimetable.Services
             user!.Teacher = correctTeacherName;
             var update = Builders<Models.User>.Update.Set(u => u.Teacher, user.Teacher);
             await userCollection.UpdateOneAsync(u => u.UserId == telegramUser.Id, update);
-            
+
             try
             {
                 await bot.SendMessageAsync(telegramUser.Id, $"Вы успешно подписались на расписание преподавателя {correctTeacherName}");
@@ -83,6 +84,8 @@ namespace TeachersTimetable.Services
             {
                 Console.WriteLine(e);
             }
+
+            return true;
         }
 
         public async Task SubscribeNotifications(User telegramUser)

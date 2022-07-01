@@ -65,6 +65,8 @@ public class ParserService : IParserService
         var web = new HtmlWeb();
         var doc = web.Load(url);
         var tables = doc.DocumentNode.SelectNodes("//table");
+        this.Teachers = new List<string>();
+        this.Timetables = new List<Timetable>();
         foreach (var table in tables)
         {
             var teachersAndLessons = new Dictionary<string, List<Lesson>>();

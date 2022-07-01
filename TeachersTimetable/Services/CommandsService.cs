@@ -1,4 +1,5 @@
 ﻿using TeachersTimetable.Config;
+using TeachersTimetable.Models;
 using Telegram.BotAPI;
 using Telegram.BotAPI.AvailableMethods;
 using Telegram.BotAPI.AvailableMethods.FormattingOptions;
@@ -16,16 +17,26 @@ namespace TeachersTimetable.Services
         private readonly IInterfaceService _interfaceService;
         private readonly IAccountService _accountService;
         private readonly IParserService _parserService;
+        private readonly IMongoService _mongoService;
 
-        public CommandsService(IInterfaceService interfaceService, IAccountService accountService, IParserService parserService)
+        public CommandsService(IInterfaceService interfaceService, IAccountService accountService, IParserService parserService, IMongoService mongoService)
         {
             this._interfaceService = interfaceService;
             this._accountService = accountService;
             this._parserService = parserService;
+            this._mongoService = mongoService;
         }
 
         public async Task CommandsValidator(Update update)
         {
+            var lastState = await this._mongoService.GetLastState(update.Message.Chat.Id);
+            if (lastState is not null && lastState == "changeTeacher")
+            {
+                await this._accountService.ChangeTeacher(update.Message.From!, update.Message.Text);
+                this._mongoService.RemoveState(update.Message.Chat.Id);
+            }
+            
+            
             switch (update.Message.Text)
             {
                 case "/start":
@@ -62,7 +73,8 @@ namespace TeachersTimetable.Services
                     var bot = new BotClient(config.Entries.Token);
                     try
                     {
-                        await bot.SendMessageAsync(update.Message.From!.Id, $"Для оформления подписки на преподавателя отправьте его фамилию *ОТВЕТОМ* на это сообщение", parseMode: ParseMode.Markdown);
+                        await bot.SendMessageAsync(update.Message.From!.Id, $"Для оформления подписки на преподавателя отправьте его фамилию.");
+                        this._mongoService.CreateState(new UserState(update.Message.Chat.Id, "changeTeacher"));
                     }
                     catch (Exception e)
                     {
@@ -86,10 +98,6 @@ namespace TeachersTimetable.Services
 
             if (update.Message.Text!.ToLower().Contains("/sayall") && update.Message.From!.Id == 698346968)
                 await this._interfaceService.NotifyAllUsers(update);
-
-            if (update.Message.ReplyToMessage is not null && update.Message.ReplyToMessage.Text ==
-                "Для оформления подписки на преподавателя отправьте его фамилию ответом на это сообщение")
-                await this._accountService.ChangeTeacher(update.Message.From!, update.Message.Text);
 
         }
     }

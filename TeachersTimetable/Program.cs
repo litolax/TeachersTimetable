@@ -15,6 +15,7 @@ namespace TeachersTimetable
             Run().GetAwaiter().GetResult();
         }
 
+        
         private static async Task Run()
         {
             
