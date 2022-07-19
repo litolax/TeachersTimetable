@@ -33,7 +33,7 @@ public class ParserService : IParserService
 {
     private readonly IMongoService _mongoService;
     public List<string> Teachers { get; set; } = new();
-    public List<Timetable> Timetables { get; set; } = new();
+    public List<Timetable>? Timetables { get; set; } = new();
 
     public ParserService(IMongoService mongoService)
     {
@@ -67,6 +67,11 @@ public class ParserService : IParserService
         var tables = doc.DocumentNode.SelectNodes("//table");
         this.Teachers = new List<string>();
         this.Timetables = new List<Timetable>();
+        if (tables is null)
+        {
+            this.Timetables = null;
+            return;
+        } 
         foreach (var table in tables)
         {
             var teachersAndLessons = new Dictionary<string, List<Lesson>>();
@@ -152,6 +157,8 @@ public class ParserService : IParserService
         var doc = web.Load(url);
 
         var teachers = doc.DocumentNode.SelectNodes("//h2");
+        if (teachers is null) return;
+        
         var newDate = doc.DocumentNode.SelectNodes("//h3")[0];
         var dateDbCollection = this._mongoService.Database.GetCollection<Timetable>("WeekTimetables");
         var dbTables = (await dateDbCollection.FindAsync(d => true)).ToList();
@@ -207,6 +214,18 @@ public class ParserService : IParserService
         foreach (var user in users)
         {
             if (!user.Notifications || user.Teacher is null) continue;
+            if (this.Timetables is null)
+            {
+                try
+                {
+                    await bot.SendMessageAsync(user.UserId, $"У преподавателя {user.Teacher} нет пар");
+                    return;
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                }
+            }
             foreach (var timetable in this.Timetables)
             {
                 var message = timetable.Date + "\n";
@@ -260,7 +279,19 @@ public class ParserService : IParserService
 
             return;
         }
-
+        
+        if (this.Timetables is null)
+        {
+            try
+            {
+                await bot.SendMessageAsync(user.UserId, $"У преподавателя {user.Teacher} нет пар");
+                return;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+        }
         foreach (var timetable in this.Timetables)
         {
             var message = timetable.Date + "\n";
