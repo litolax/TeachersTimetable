@@ -19,7 +19,7 @@ jobs:
       - name: Install dependencies
         run: dotnet restore
       - name: Build
-        run: dotnet build --configuration Release --no-restore --output TeachersTimetable/Artifacts
+        run: dotnet publish -c release -r ubuntu.16.04-x64 --no-restore --output TeachersTimetable/Artifacts
       - name: Test
         run: dotnet test --no-restore --verbosity normal
       - name: Upload dotnet test results
