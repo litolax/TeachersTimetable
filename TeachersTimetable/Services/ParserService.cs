@@ -76,6 +76,11 @@ public class ParserService : IParserService
         {
             var teachersAndLessons = new Dictionary<string, List<Lesson>>();
             var t = table.SelectNodes("./tbody/tr");
+            if (t is null)
+            {
+                t = table.SelectNodes("./thead/tr");
+                if (t is null) continue;
+            }
             for (int i = 3; i < t.Count; i++)
             {
                 List<Lesson> lessons = new List<Lesson>();
