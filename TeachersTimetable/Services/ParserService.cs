@@ -81,7 +81,7 @@ public class ParserService : IParserService
                 t = table.SelectNodes("./thead/tr");
                 if (t is null) continue;
             }
-            for (int i = 3; i < t.Count; i++)
+            for (int i = 0; i < t.Count; i++)
             {
                 List<Lesson> lessons = new List<Lesson>();
                 int number = 1;
@@ -116,7 +116,7 @@ public class ParserService : IParserService
                 lessons.Reverse();
                 foreach (var lesson in lessons)
                 {
-                    if (lesson.Cabinet == "-" || lesson.Group == "-") count++;
+                    if (lesson.Cabinet == "-" && lesson.Group == "-") count++;
                     else break;
                 }
 
@@ -233,7 +233,7 @@ public class ParserService : IParserService
             }
             foreach (var timetable in this.Timetables)
             {
-                var message = timetable.Date + "\n";
+                var message = timetable.Date + "\n\n";
                 foreach (var dictionary in timetable.Table)
                 {
                     dictionary.TryGetValue(user.Teacher, out var lessons);
@@ -299,7 +299,7 @@ public class ParserService : IParserService
         }
         foreach (var timetable in this.Timetables)
         {
-            var message = timetable.Date + "\n";
+            var message = timetable.Date + "\n\n";
             foreach (var dictionary in timetable.Table)
             {
                 dictionary.TryGetValue(user.Teacher, out var lessons);
