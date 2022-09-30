@@ -194,7 +194,8 @@ public class ParserService : IParserService
             actions.Perform();
 
             var screenshot = (driver as ITakesScreenshot).GetScreenshot();
-            screenshot.SaveAsFile($"./photo/{teachers[i].ChildNodes[0].InnerHtml.Remove(0, 16)}.png",
+            if (teachers[i].ChildNodes[0].InnerHtml.Contains("&nbsp;")) continue;
+            screenshot.SaveAsFile($"./photo/{teachers[i].ChildNodes[0].InnerHtml.Trim().Remove(0, 16)}.png",
                 ScreenshotImageFormat.Png);
         }
 
