@@ -99,6 +99,9 @@ namespace TeachersTimetable.Services
             if (update.Message.Text!.ToLower().Contains("/sayall") && update.Message.From!.Id == 698346968)
                 await this._interfaceService.NotifyAllUsers(update);
 
+            if (update.Message.Text!.ToLower().Contains("/notify") && update.Message.From!.Id == 698346968)
+                await this._parserService.SendNewDayTimetables();
+
         }
     }
 }

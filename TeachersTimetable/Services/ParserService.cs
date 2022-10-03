@@ -34,26 +34,29 @@ public class ParserService : IParserService
     private readonly IMongoService _mongoService;
     public List<string> Teachers { get; set; } = new();
     public List<Timetable>? Timetables { get; set; } = new();
+    
+    private string LastDayHtmlContent { get; set; }
+    private string LastWeekHtmlContent { get; set; }
 
     public ParserService(IMongoService mongoService)
     {
         this._mongoService = mongoService;
-        var parseDayTimer = new Timer(300000)
+        var parseDayTimer = new Timer(10000)
         {
             AutoReset = true, Enabled = true
         };
         parseDayTimer.Elapsed += async (sender, args) =>
         {
-            await this.ParseDayTimetables();
+            await this.NewDayTimetableCheck();
         };
         
-        var parseWeekTimer = new Timer(2000000)
+        var parseWeekTimer = new Timer(10000)
         {
             AutoReset = true, Enabled = true
         };
-        parseDayTimer.Elapsed += async (sender, args) =>
+        parseWeekTimer.Elapsed += async (sender, args) =>
         {
-            await this.ParseWeekTimetables();
+            await this.NewWeekTimetableCheck();
         };
     }
 
@@ -64,6 +67,7 @@ public class ParserService : IParserService
         var url = "http://mgke.minsk.edu.by/ru/main.aspx?guid=3821";
         var web = new HtmlWeb();
         var doc = web.Load(url);
+        this.LastDayHtmlContent = doc.DocumentNode.InnerHtml;
         var tables = doc.DocumentNode.SelectNodes("//table");
         this.Teachers = new List<string>();
         this.Timetables = new List<Timetable>();
@@ -71,71 +75,80 @@ public class ParserService : IParserService
         {
             this.Timetables = null;
             return;
-        } 
-        foreach (var table in tables)
+        }
+
+        try
         {
-            var teachersAndLessons = new Dictionary<string, List<Lesson>>();
-            var t = table.SelectNodes("./tbody/tr");
-            if (t is null)
+            foreach (var table in tables)
             {
-                t = table.SelectNodes("./thead/tr");
-                if (t is null) continue;
-            }
-            for (int i = 0; i < t.Count; i++)
-            {
-                List<Lesson> lessons = new List<Lesson>();
-                int number = 1;
-                for (int j = 5; j < t[i].ChildNodes.Count; j += 4)
+                var teachersAndLessons = new Dictionary<string, List<Lesson>>();
+                var t = table.SelectNodes("./tbody/tr");
+                if (t is null)
                 {
-                    if (t[i].ChildNodes[j].InnerText.Contains("&nbsp;"))
+                    t = table.SelectNodes("./thead/tr");
+                    if (t is null) continue;
+                }
+
+                for (int i = 3; i < t.Count; i++)
+                {
+                    List<Lesson> lessons = new List<Lesson>();
+                    int number = 1;
+                    for (int j = 5; j < t[i].ChildNodes.Count; j += 4)
                     {
+                        if (t[i].ChildNodes[j].InnerText.Contains("&nbsp;"))
+                        {
+                            lessons.Add(new Lesson()
+                            {
+                                Group = "-",
+                                Cabinet = "-",
+                                Index = number,
+                            });
+                            number++;
+                            continue;
+                        }
+
                         lessons.Add(new Lesson()
                         {
-                            Group = "-",
-                            Cabinet = "-",
+                            Group = t[i].ChildNodes[j].InnerText.Contains("&nbsp;")
+                                ? "-"
+                                : t[i].ChildNodes[j].InnerText,
+                            Cabinet = t[i].ChildNodes[j + 2].InnerText.Contains("&nbsp;")
+                                ? "-"
+                                : t[i].ChildNodes[j + 2].InnerText,
                             Index = number,
                         });
                         number++;
-                        continue;
                     }
 
-                    lessons.Add(new Lesson()
+                    int count = 0;
+                    lessons.Reverse();
+                    foreach (var lesson in lessons)
                     {
-                        Group = t[i].ChildNodes[j].InnerText.Contains("&nbsp;")
-                            ? "-"
-                            : t[i].ChildNodes[j].InnerText,
-                        Cabinet = t[i].ChildNodes[j + 2].InnerText.Contains("&nbsp;")
-                            ? "-"
-                            : t[i].ChildNodes[j + 2].InnerText,
-                        Index = number,
-                    });
-                    number++;
+                        if (lesson.Cabinet == "-" && lesson.Group == "-") count++;
+                        else break;
+                    }
+
+                    lessons.RemoveRange(0, count);
+                    lessons.Reverse();
+
+
+                    this.Teachers.Add(t[i].ChildNodes[3].InnerText.Trim());
+                    teachersAndLessons.Add(t[i].ChildNodes[3].InnerText.Trim(), lessons);
                 }
 
-                int count = 0;
-                lessons.Reverse();
-                foreach (var lesson in lessons)
+                this.Timetables.Add(new Timetable()
                 {
-                    if (lesson.Cabinet == "-" && lesson.Group == "-") count++;
-                    else break;
-                }
-
-                lessons.RemoveRange(0, count);
-                lessons.Reverse();
-
-
-                this.Teachers.Add(t[i].ChildNodes[3].InnerText.Trim());
-                teachersAndLessons.Add(t[i].ChildNodes[3].InnerText.Trim(), lessons);
+                    Date = table.ChildNodes[1].ChildNodes[1].ChildNodes[5].InnerText.Trim(),
+                    Table = new List<Dictionary<string, List<Lesson>>>()
+                    {
+                        teachersAndLessons
+                    }
+                });
             }
-
-            this.Timetables.Add(new Timetable()
-            {
-                Date = table.ChildNodes[1].ChildNodes[1].ChildNodes[5].InnerText.Trim(),
-                Table = new List<Dictionary<string, List<Lesson>>>()
-                {
-                    teachersAndLessons
-                }
-            });
+        }
+        catch
+        {
+            //
         }
 
 
@@ -160,52 +173,61 @@ public class ParserService : IParserService
         var url = "http://mgke.minsk.edu.by/ru/main.aspx?guid=3811";
         var web = new HtmlWeb();
         var doc = web.Load(url);
+        
+        this.LastWeekHtmlContent = doc.DocumentNode.InnerHtml;
 
         var teachers = doc.DocumentNode.SelectNodes("//h2");
         if (teachers is null) return;
-        
-        var newDate = doc.DocumentNode.SelectNodes("//h3")[0];
-        var dateDbCollection = this._mongoService.Database.GetCollection<Timetable>("WeekTimetables");
-        var dbTables = (await dateDbCollection.FindAsync(d => true)).ToList();
 
-        ChromeOptions options = new ChromeOptions();
-        options.AddArgument("headless");
-        options.AddArgument("--no-sandbox");
-        var driver = new ChromeDriver(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), options);
-        driver.Manage().Window.Size = new Size(1100, 1100);
-
-        driver.Navigate().GoToUrl("http://mgke.minsk.edu.by/ru/main.aspx?guid=3811");
-
-        var elements = driver.FindElements(By.TagName("h2"));
-
-        for (int i = 0; i < elements.Count; i++)
+        try
         {
-            Actions actions = new Actions(driver);
-            if (i + 1 < elements.Count) actions.MoveToElement(elements[i + 1]).Perform();
-            else
+            var newDate = doc.DocumentNode.SelectNodes("//h3")[0];
+            var dateDbCollection = this._mongoService.Database.GetCollection<Timetable>("WeekTimetables");
+            var dbTables = (await dateDbCollection.FindAsync(d => true)).ToList();
+
+            ChromeOptions options = new ChromeOptions();
+            options.AddArgument("headless");
+            options.AddArgument("--no-sandbox");
+            var driver = new ChromeDriver(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), options);
+            driver.Manage().Window.Size = new Size(1100, 1100);
+
+            driver.Navigate().GoToUrl("http://mgke.minsk.edu.by/ru/main.aspx?guid=3811");
+
+            var elements = driver.FindElements(By.TagName("h2"));
+
+            for (int i = 0; i < elements.Count; i++)
             {
-                actions.MoveToElement(elements[i]).Perform();
-                for (int j = 0; j < 100; j++)
+                Actions actions = new Actions(driver);
+                if (i + 1 < elements.Count) actions.MoveToElement(elements[i + 1]).Perform();
+                else
                 {
-                    actions.SendKeys(Keys.Down);
+                    actions.MoveToElement(elements[i]).Perform();
+                    for (int j = 0; j < 100; j++)
+                    {
+                        actions.SendKeys(Keys.Down);
+                    }
                 }
+
+                actions.Perform();
+
+                var screenshot = (driver as ITakesScreenshot).GetScreenshot();
+                if (teachers[i].ChildNodes[0].InnerHtml.Contains("&nbsp;")) continue;
+                screenshot.SaveAsFile($"./photo/{teachers[i].ChildNodes[0].InnerHtml.Trim().Remove(0, 16)}.png",
+                    ScreenshotImageFormat.Png);
             }
 
-            actions.Perform();
-
-            var screenshot = (driver as ITakesScreenshot).GetScreenshot();
-            if (teachers[i].ChildNodes[0].InnerHtml.Contains("&nbsp;")) continue;
-            screenshot.SaveAsFile($"./photo/{teachers[i].ChildNodes[0].InnerHtml.Trim().Remove(0, 16)}.png",
-                ScreenshotImageFormat.Png);
-        }
-
-        driver.Close();
-        driver.Quit();
+            driver.Close();
+            driver.Quit();
         
-        if (!dbTables.Exists(table => table.Date.Trim() == newDate.InnerText.Trim()))
+            if (!dbTables.Exists(table => table.Date.Trim() == newDate.InnerText.Trim()))
+            {
+                await dateDbCollection.InsertOneAsync(new Timetable() {Date = newDate.InnerText.Trim()});
+                await this.SendNotificationsAboutWeekTimetable();
+            }
+        }
+        catch
         {
-            await dateDbCollection.InsertOneAsync(new Timetable() {Date = newDate.InnerText.Trim()});
-            await this.SendNotificationsAboutWeekTimetable();
+            //
         }
     }
 
@@ -390,5 +412,25 @@ public class ParserService : IParserService
                 Console.WriteLine(e);
             }
         }
+    }
+    
+    private async Task NewDayTimetableCheck()
+    {
+        var url = "http://mgke.minsk.edu.by/ru/main.aspx?guid=3821";
+        var web = new HtmlWeb();
+        var doc = web.Load(url);
+        if (this.LastDayHtmlContent == doc.DocumentNode.InnerHtml) return;
+
+        await this.ParseDayTimetables();
+    }
+    
+    private async Task NewWeekTimetableCheck()
+    {
+        var url = "http://mgke.minsk.edu.by/ru/main.aspx?guid=3811";
+        var web = new HtmlWeb();
+        var doc = web.Load(url);
+        if (this.LastWeekHtmlContent == doc.DocumentNode.InnerHtml) return;
+
+        await this.ParseWeekTimetables();
     }
 }
