@@ -1,11 +1,12 @@
-﻿using System.Drawing;
-using System.Reflection;
+﻿using System.Reflection;
 using HtmlAgilityPack;
 using MongoDB.Driver;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Interactions;
+using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Processing;
 using TeachersTimetable.Config;
 using TeachersTimetable.Models;
 using Telegram.BotAPI;
@@ -29,6 +30,9 @@ public interface IParserService
 public class ParserService : IParserService
 {
     private readonly IMongoService _mongoService;
+    
+    private const string WeekUrl = "https://mgkct.minskedu.gov.by/персоналии/преподавателям/расписание-занятий-на-неделю";
+    
     public List<string> Teachers { get; } = new()
     {
         "Амброжи Н. М.",
@@ -264,9 +268,8 @@ public class ParserService : IParserService
 
     public async Task ParseWeekTimetables()
     {
-        var url = "http://mgke.minsk.edu.by/ru/main.aspx?guid=3811";
         var web = new HtmlWeb();
-        var doc = web.Load(url);
+        var doc = web.Load(WeekUrl);
         
         this.LastWeekHtmlContent = doc.DocumentNode.InnerHtml;
 
@@ -275,53 +278,52 @@ public class ParserService : IParserService
 
         try
         {
-            var newDate = doc.DocumentNode.SelectNodes("//h3")[0];
+            var newDate = doc.DocumentNode.SelectNodes("//h3")[0].InnerText.Trim();
             var dateDbCollection = this._mongoService.Database.GetCollection<Timetable>("WeekTimetables");
             var dbTables = (await dateDbCollection.FindAsync(d => true)).ToList();
 
-            ChromeOptions options = new ChromeOptions();
+            var options = new ChromeOptions();
+            
             options.AddArgument("headless");
             options.AddArgument("--no-sandbox");
+            
             var driver = new ChromeDriver(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), options);
-            driver.Manage().Window.Size = new Size(1100, 1100);
 
-            driver.Navigate().GoToUrl("http://mgke.minsk.edu.by/ru/main.aspx?guid=3811");
-
-            var elements = driver.FindElements(By.TagName("h2"));
-
-            for (int i = 0; i < elements.Count; i++)
+            foreach (var teacher in this.Teachers)
             {
-                Actions actions = new Actions(driver);
-                if (i + 1 < elements.Count) actions.MoveToElement(elements[i + 1]).Perform();
-                else
-                {
-                    actions.MoveToElement(elements[i]).Perform();
-                    for (int j = 0; j < 100; j++)
-                    {
-                        actions.SendKeys(Keys.Down);
-                    }
-                }
+                var filePath = $"./photo/{teacher}.png";
 
-                actions.Perform();
+                driver.Navigate().GoToUrl($"{WeekUrl}?teacher={teacher.Replace(" ", "+")}");
+
+                Utils.ModifyUnnecessaryElementsOnWebsite(ref driver);
+
+                var element = driver.FindElements(By.TagName("h2")).FirstOrDefault();
+                if (element == default) continue;
+
+                var actions = new Actions(driver);
+                actions.MoveToElement(element).Perform();
 
                 var screenshot = (driver as ITakesScreenshot).GetScreenshot();
-                if (teachers[i].ChildNodes[0].InnerHtml.Contains("&nbsp;")) continue;
-                screenshot.SaveAsFile($"./photo/{teachers[i].ChildNodes[0].InnerHtml.Trim().Remove(0, 16)}.png",
-                    ScreenshotImageFormat.Png);
-            }
+                screenshot.SaveAsFile(filePath, ScreenshotImageFormat.Png);
 
+                var image = await Image.LoadAsync(filePath);
+
+                image.Mutate(x => x.Resize((int)(image.Width / 1.5), (int)(image.Height / 1.5)));
+                await image.SaveAsPngAsync(filePath);
+            }
+        
             driver.Close();
             driver.Quit();
-        
-            if (!dbTables.Exists(table => table.Date.Trim() == newDate.InnerText.Trim()))
+           
+            if (!dbTables.Exists(table => table.Date.Trim() == newDate))
             {
-                await dateDbCollection.InsertOneAsync(new Timetable() {Date = newDate.InnerText.Trim()});
+                await dateDbCollection.InsertOneAsync(new Timetable() {Date = newDate});
                 await this.SendNotificationsAboutWeekTimetable();
             }
         }
-        catch
+        catch (Exception e)
         {
-            //
+            Console.WriteLine(e);
         }
     }
 
@@ -467,8 +469,17 @@ public class ParserService : IParserService
             return;
         }
 
+        Image? image;
+        try
+        {
+            image = await Image.LoadAsync($"./photo/{user.Teacher}.png");
+        }
+        catch
+        {
+            await bot.SendMessageAsync(user.UserId, "Увы, данный преподаватель не найдена");
+            return;
+        }
 
-        var image = await SixLabors.ImageSharp.Image.LoadAsync($"./photo/{user.Teacher}.png");
         using (var ms = new MemoryStream())
         {
             await image.SaveAsync(ms, new PngEncoder());
@@ -520,9 +531,8 @@ public class ParserService : IParserService
     
     private async Task NewWeekTimetableCheck()
     {
-        var url = "http://mgke.minsk.edu.by/ru/main.aspx?guid=3811";
         var web = new HtmlWeb();
-        var doc = web.Load(url);
+        var doc = web.Load(WeekUrl);
         if (this.LastWeekHtmlContent == doc.DocumentNode.InnerHtml) return;
 
         await this.ParseWeekTimetables();
