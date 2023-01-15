@@ -1,13 +1,10 @@
 ﻿using System.Drawing;
-using System.Drawing.Imaging;
 using System.Reflection;
 using HtmlAgilityPack;
 using MongoDB.Driver;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Interactions;
-using OpenQA.Selenium.Support.Extensions;
-using SixLabors.ImageSharp.Formats.Bmp;
 using SixLabors.ImageSharp.Formats.Png;
 using TeachersTimetable.Config;
 using TeachersTimetable.Models;
@@ -21,7 +18,7 @@ namespace TeachersTimetable.Services;
 
 public interface IParserService
 {
-    List<string> Teachers { get; set; }
+    List<string> Teachers { get; }
     Task SendNewDayTimetables();
     Task SendDayTimetable(User telegramUser);
     Task ParseDayTimetables();
@@ -32,7 +29,107 @@ public interface IParserService
 public class ParserService : IParserService
 {
     private readonly IMongoService _mongoService;
-    public List<string> Teachers { get; set; } = new();
+    public List<string> Teachers { get; } = new()
+    {
+        "Амброжи Н. М.",
+        "Ананич В. Д.",
+        "Анципов Е. Ю.",
+        "Бабер А. И.",
+        "Барсукова Е. А.",
+        "Барсукова Н. В.",
+        "Белобровик А. А.",
+        "Берговина А. В.",
+        "Богдановская О. Н.",
+        "Босянок Г. Ф.",
+        "Бровка Д. С.",
+        "Вайтович И. М.",
+        "Витебская Е. С.",
+        "Волошко М. Ф.",
+        "Воронько С. В.",
+        "Вострикова Т. С.",
+        "Галенко Е. Л.",
+        "Галицкий М. И.",
+        "Герасюк В. В.",
+        "Гриневич П. Р.",
+        "Громыко Н. К.",
+        "Дзевенская Р. И.",
+        "Дзевенский Э. М.",
+        "Дорц Н. А.",
+        "Дудко А. Р.",
+        "Жарский В. А.",
+        "Жукова Т. Ю.",
+        "Зайковская М. И.",
+        "Звягина Д. Ч.",
+        "Зданович С. А.",
+        "Калацкая Т. Е.",
+        "Камлюк В. С.",
+        "Касперович С. А.",
+        "Киселёв В. Д.",
+        "Козел А. А.",
+        "Козел Г. В.",
+        "Колинко Н. Г.",
+        "Колышкина Л. Н.",
+        "Коропа Е. Н.",
+        "Кохно Т. А.",
+        "Красовская А. В.",
+        "Крыж Е. А.",
+        "Кулецкая Ю. Н.",
+        "Кульбеда М. П.",
+        "Лебедкина Н. В.",
+        "Левонюк Е. А.",
+        "Леус Ж. В.",
+        "Лихачева О. П.",
+        "Магаревич Е. А.",
+        "Макаренко Е. В.",
+        "Мурашко А. В.",
+        "Нарбутович К. П.",
+        "Немцева Н. А.",
+        "Оберган С. А.",
+        "Перепелкин А. М.",
+        "Петуховский М. С.",
+        "Пешкова Г. Д.",
+        "Питель В. В.",
+        "Плаксин Е. Б.",
+        "Поклад Т. И.",
+        "Потапчик И. Г.",
+        "Потес Р. И.",
+        "Потоцкий Д. С.",
+        "Прокопович М. Е.",
+        "Протасеня А. О.",
+        "Пугач А. И.",
+        "Пуршнев А. В.",
+        "Романович С. Г.",
+        "Самарская Н. В.",
+        "Самохвал Н. Н.",
+        "Северин А. В.",
+        "Селицкая О. Ю.",
+        "Семенова Л. Н.",
+        "Сергун Т. С.",
+        "Скобля Я. Э.",
+        "Сом И. М.",
+        "Сотникова О. А.",
+        "Стома Р. Н.",
+        "Стрельченя В. М.",
+        "Тарасевич А. В.",
+        "Тарасова Е. И.",
+        "Титов Ю. А.",
+        "Тихонович Н. В.",
+        "Тишков М. И.",
+        "Тозик Е. Ф.",
+        "Усикова Л. Н.",
+        "Федкевич Д. А.",
+        "Федунов В. С.",
+        "Фетисова Ю. Б.",
+        "Филипцова Е. В.",
+        "Харевская Е. Т.",
+        "Хомченко И. И.",
+        "Чертков М. Д.",
+        "Шавейко А. А.",
+        "Шеметов И. В.",
+        "Щуко О. И.",
+        "Эльканович А. Ф.",
+    };
+    
     public List<Timetable>? Timetables { get; set; } = new();
     
     private string LastDayHtmlContent { get; set; }
@@ -69,7 +166,6 @@ public class ParserService : IParserService
         var doc = web.Load(url);
         this.LastDayHtmlContent = doc.DocumentNode.InnerHtml;
         var tables = doc.DocumentNode.SelectNodes("//table");
-        this.Teachers = new List<string>();
         this.Timetables = new List<Timetable>();
         if (tables is null)
         {
@@ -130,9 +226,7 @@ public class ParserService : IParserService
 
                     lessons.RemoveRange(0, count);
                     lessons.Reverse();
-
-
-                    this.Teachers.Add(t[i].ChildNodes[3].InnerText.Trim());
+                    
                     teachersAndLessons.Add(t[i].ChildNodes[3].InnerText.Trim(), lessons);
                 }
 
