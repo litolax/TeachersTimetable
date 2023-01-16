@@ -142,14 +142,15 @@ public class ParserService : IParserService
     public ParserService(IMongoService mongoService)
     {
         this._mongoService = mongoService;
-        var parseDayTimer = new Timer(10000)
-        {
-            AutoReset = true, Enabled = true
-        };
-        parseDayTimer.Elapsed += async (sender, args) =>
-        {
-            await this.NewDayTimetableCheck();
-        };
+        
+        // var parseDayTimer = new Timer(10000)
+        // {
+        //     AutoReset = true, Enabled = true
+        // };
+        // parseDayTimer.Elapsed += async (sender, args) =>
+        // {
+        //     await this.NewDayTimetableCheck();
+        // };
         
         var parseWeekTimer = new Timer(10000)
         {
@@ -286,8 +287,9 @@ public class ParserService : IParserService
             
             options.AddArgument("headless");
             options.AddArgument("--no-sandbox");
+            options.AddArguments("--disable-dev-shm-usage");
             
-            var driver = new ChromeDriver(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), options);
+            var driver = new ChromeDriver(options);
 
             foreach (var teacher in this.Teachers)
             {
@@ -318,7 +320,7 @@ public class ParserService : IParserService
             if (!dbTables.Exists(table => table.Date.Trim() == newDate))
             {
                 await dateDbCollection.InsertOneAsync(new Timetable() {Date = newDate});
-                await this.SendNotificationsAboutWeekTimetable();
+                // await this.SendNotificationsAboutWeekTimetable();
             }
         }
         catch (Exception e)
@@ -389,6 +391,10 @@ public class ParserService : IParserService
         var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
         var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First();
         if (user is null) return;
+        
+        //todo спилить
+        await bot.SendMessageAsync(user.UserId, $"Дневное расписание временно недоступно");
+        return;
 
         if (user.Teacher is null)
         {
@@ -510,7 +516,7 @@ public class ParserService : IParserService
             
             try
             {
-                await bot.SendMessageAsync(user.UserId, "Обновлено расписание на неделю");
+                await bot.SendMessageAsync(user.UserId, "Обновлена страница расписания на неделю");
             }
             catch (Exception e)
             {
@@ -519,15 +525,15 @@ public class ParserService : IParserService
         }
     }
     
-    private async Task NewDayTimetableCheck()
-    {
-        var url = "http://mgke.minsk.edu.by/ru/main.aspx?guid=3821";
-        var web = new HtmlWeb();
-        var doc = web.Load(url);
-        if (this.LastDayHtmlContent == doc.DocumentNode.InnerHtml) return;
-
-        await this.ParseDayTimetables();
-    }
+    // private async Task NewDayTimetableCheck()
+    // {
+    //     var url = "http://mgke.minsk.edu.by/ru/main.aspx?guid=3821";
+    //     var web = new HtmlWeb();
+    //     var doc = web.Load(url);
+    //     if (this.LastDayHtmlContent == doc.DocumentNode.InnerHtml) return;
+    //
+    //     await this.ParseDayTimetables();
+    // }
     
     private async Task NewWeekTimetableCheck()
     {
@@ -536,5 +542,6 @@ public class ParserService : IParserService
         if (this.LastWeekHtmlContent == doc.DocumentNode.InnerHtml) return;
 
         await this.ParseWeekTimetables();
+        await this.SendNotificationsAboutWeekTimetable();
     }
 }
