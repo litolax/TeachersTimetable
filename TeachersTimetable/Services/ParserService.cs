@@ -138,6 +138,8 @@ public class ParserService : IParserService
     
     private string LastDayHtmlContent { get; set; }
     private string LastWeekHtmlContent { get; set; }
+    
+    private bool _weekParseStarted = false;
 
     public ParserService(IMongoService mongoService)
     {
@@ -152,13 +154,13 @@ public class ParserService : IParserService
         //     await this.NewDayTimetableCheck();
         // };
         
-        var parseWeekTimer = new Timer(10000)
+        var parseWeekTimer = new Timer(100_000)
         {
             AutoReset = true, Enabled = true
         };
-        parseWeekTimer.Elapsed += async (sender, args) =>
+        parseWeekTimer.Elapsed += (sender, args) =>
         {
-            await this.NewWeekTimetableCheck();
+            _ = this.NewWeekTimetableCheck();
         };
     }
 
@@ -269,13 +271,21 @@ public class ParserService : IParserService
 
     public async Task ParseWeekTimetables()
     {
+        if (_weekParseStarted) return;
+        _weekParseStarted = true;
+        
         var web = new HtmlWeb();
         var doc = web.Load(WeekUrl);
         
-        this.LastWeekHtmlContent = doc.DocumentNode.InnerHtml;
+        var content = doc.DocumentNode.SelectNodes("//div/div/div/div/div/div").FirstOrDefault();
+        if (content != default) this.LastWeekHtmlContent = content.InnerText;
 
         var teachers = doc.DocumentNode.SelectNodes("//h2");
-        if (teachers is null) return;
+        if (teachers is null) 
+        {
+            _weekParseStarted = false;
+            return;
+        }
 
         try
         {
@@ -320,12 +330,14 @@ public class ParserService : IParserService
             if (!dbTables.Exists(table => table.Date.Trim() == newDate))
             {
                 await dateDbCollection.InsertOneAsync(new Timetable() {Date = newDate});
-                // await this.SendNotificationsAboutWeekTimetable();
             }
+            await this.SendNotificationsAboutWeekTimetable();
+            _weekParseStarted = false;
         }
         catch (Exception e)
         {
             Console.WriteLine(e);
+            _weekParseStarted = false;
         }
     }
 
@@ -539,9 +551,12 @@ public class ParserService : IParserService
     {
         var web = new HtmlWeb();
         var doc = web.Load(WeekUrl);
-        if (this.LastWeekHtmlContent == doc.DocumentNode.InnerHtml) return;
+        
+        var content = doc.DocumentNode.SelectNodes("//div/div/div/div/div/div").FirstOrDefault();
+        if (content == default) return;
+        
+        if (this.LastWeekHtmlContent == content.InnerText) return;
 
-        await this.ParseWeekTimetables();
-        await this.SendNotificationsAboutWeekTimetable();
+        _ = this.ParseWeekTimetables();
     }
 }
