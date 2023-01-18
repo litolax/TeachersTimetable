@@ -331,7 +331,7 @@ public class ParserService : IParserService
             {
                 await dateDbCollection.InsertOneAsync(new Timetable() {Date = newDate});
             }
-            await this.SendNotificationsAboutWeekTimetable();
+            //await this.SendNotificationsAboutWeekTimetable();
             _weekParseStarted = false;
         }
         catch (Exception e)
