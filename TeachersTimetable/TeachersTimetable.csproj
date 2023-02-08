@@ -19,6 +19,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\TelegramBot-Timetable-Core\TelegramBot-Timetable-Core.csproj" />
       <ProjectReference Include="..\TelegramBot-Timetable-Core\TelegramBot-Timetable-Core\TelegramBot-Timetable-Core.csproj" />
     </ItemGroup>
 
