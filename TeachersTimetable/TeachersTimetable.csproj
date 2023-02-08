@@ -18,4 +18,8 @@
       <PackageReference Include="Telegram.BotAPI" Version="6.4.0" />
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\TelegramBot-Timetable-Core\TelegramBot-Timetable-Core\TelegramBot-Timetable-Core.csproj" />
+    </ItemGroup>
+
 </Project>

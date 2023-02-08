@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TeachersTimetable", "TeachersTimetable\TeachersTimetable.csproj", "{A07EB433-528B-4C96-BE34-E18D30A658EC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TelegramBot-Timetable-Core", "TelegramBot-Timetable-Core\TelegramBot-Timetable-Core\TelegramBot-Timetable-Core.csproj", "{ECCB4A6A-5C8E-4B4A-A01F-75F3C69ED525}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{A07EB433-528B-4C96-BE34-E18D30A658EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A07EB433-528B-4C96-BE34-E18D30A658EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A07EB433-528B-4C96-BE34-E18D30A658EC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ECCB4A6A-5C8E-4B4A-A01F-75F3C69ED525}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ECCB4A6A-5C8E-4B4A-A01F-75F3C69ED525}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ECCB4A6A-5C8E-4B4A-A01F-75F3C69ED525}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ECCB4A6A-5C8E-4B4A-A01F-75F3C69ED525}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
