@@ -5,6 +5,7 @@ using Telegram.BotAPI;
 using Telegram.BotAPI.AvailableMethods;
 using Telegram.BotAPI.AvailableTypes;
 using User = Telegram.BotAPI.AvailableTypes.User;
+using TelegramBot_Timetable_Core.Config;
 
 namespace TeachersTimetable.Services
 {

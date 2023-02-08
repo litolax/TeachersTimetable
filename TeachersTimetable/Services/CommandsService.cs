@@ -2,14 +2,14 @@
 using TeachersTimetable.Models;
 using Telegram.BotAPI;
 using Telegram.BotAPI.AvailableMethods;
-using Telegram.BotAPI.AvailableMethods.FormattingOptions;
-using Telegram.BotAPI.GettingUpdates;
+using Telegram.BotAPI.AvailableTypes;
+using TelegramBot_Timetable_Core.Config;
+using TelegramBot_Timetable_Core;
 
 namespace TeachersTimetable.Services
 {
     public interface ICommandsService
     {
-        void CommandsValidator(Update update);
     }
 
     public class CommandsService : ICommandsService
@@ -21,50 +21,52 @@ namespace TeachersTimetable.Services
 
         public CommandsService(IInterfaceService interfaceService, IAccountService accountService, IParserService parserService, IMongoService mongoService)
         {
+            Core.OnMessageReceive += OnMessageReceive;
+            
             this._interfaceService = interfaceService;
             this._accountService = accountService;
             this._parserService = parserService;
             this._mongoService = mongoService;
         }
 
-        public async void CommandsValidator(Update update)
+        private async void OnMessageReceive(Message message)
         {
-            var lastState = await this._mongoService.GetLastState(update.Message.Chat.Id);
+            var lastState = await this._mongoService.GetLastState(message.Chat.Id);
             if (lastState is not null && lastState == "changeTeacher")
             {
-                await this._accountService.ChangeTeacher(update.Message.From!, update.Message.Text);
-                this._mongoService.RemoveState(update.Message.Chat.Id);
+                await this._accountService.ChangeTeacher(message.From!, message.Text);
+                this._mongoService.RemoveState(message.Chat.Id);
             }
             
             
-            switch (update.Message.Text)
+            switch (message.Text)
             {
                 case "/start":
                 {
-                    await this._interfaceService.OpenMainMenu(update);
+                    await this._interfaceService.OpenMainMenu(null); //update
                     break;
                 }
                 case "/menu":
                 {
-                    await this._interfaceService.OpenMainMenu(update);
+                    await this._interfaceService.OpenMainMenu(null); //update
                     break;
                 }
                 case "/help":
                 {
-                    if (update.Message.From is null) return;
-                    await this._interfaceService.HelpCommand(update.Message.From);
+                    if (message.From is null) return;
+                    await this._interfaceService.HelpCommand(message.From);
                     break;
                 }
                 case "Посмотреть расписание на день":
                 {
-                    if (update.Message.From is null) return;
-                    await this._parserService.SendDayTimetable(update.Message.From);
+                    if (message.From is null) return;
+                    await this._parserService.SendDayTimetable(message.From);
                     break;
                 }
                 case "Посмотреть расписание на неделю":
                 {
-                    if (update.Message.From is null) return;
-                    await this._parserService.SendWeekTimetable(update.Message.From);
+                    if (message.From is null) return;
+                    await this._parserService.SendWeekTimetable(message.From);
                     break;
                 }
                 case "Сменить преподавателя":
@@ -73,8 +75,8 @@ namespace TeachersTimetable.Services
                     var bot = new BotClient(config.Entries.Token);
                     try
                     {
-                        await bot.SendMessageAsync(update.Message.From!.Id, $"Для оформления подписки на преподавателя отправьте его фамилию.");
-                        this._mongoService.CreateState(new UserState(update.Message.Chat.Id, "changeTeacher"));
+                        await bot.SendMessageAsync(message.From!.Id, $"Для оформления подписки на преподавателя отправьте его фамилию.");
+                        this._mongoService.CreateState(new UserState(message.Chat.Id, "changeTeacher"));
                     }
                     catch (Exception e)
                     {
@@ -84,22 +86,22 @@ namespace TeachersTimetable.Services
                 }
                 case "Подписаться на рассылку":
                 {
-                    if (update.Message.From is null) return;
-                    await this._accountService.SubscribeNotifications(update.Message.From);
+                    if (message.From is null) return;
+                    await this._accountService.SubscribeNotifications(message.From);
                     break;
                 }
                 case "Отписаться от рассылки":
                 {
-                    if (update.Message.From is null) return;
-                    await this._accountService.UnSubscribeNotifications(update.Message.From);
+                    if (message.From is null) return;
+                    await this._accountService.UnSubscribeNotifications(message.From);
                     break;
                 }
             }
 
-            if (update.Message.Text!.ToLower().Contains("/sayall") && update.Message.From!.Id == 698346968)
-                await this._interfaceService.NotifyAllUsers(update);
+            if (message.Text!.ToLower().Contains("/sayall") && message.From!.Id == 698346968)
+                await this._interfaceService.NotifyAllUsers(null); //update
 
-            if (update.Message.Text!.ToLower().Contains("/notify") && update.Message.From!.Id == 698346968)
+            if (message.Text!.ToLower().Contains("/notify") && message.From!.Id == 698346968)
                 await this._parserService.SendNewDayTimetables();
 
         }

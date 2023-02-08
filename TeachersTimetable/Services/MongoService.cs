@@ -1,6 +1,7 @@
 ﻿using MongoDB.Driver;
 using TeachersTimetable.Config;
 using TeachersTimetable.Models;
+using TelegramBot_Timetable_Core.Config;
 
 namespace TeachersTimetable.Services
 {
