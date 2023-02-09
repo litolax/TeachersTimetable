@@ -26,11 +26,11 @@ namespace TeachersTimetable
                 .BuildServiceProvider(true);
 
             serviceProvider.GetService<ICommandsService>();
-            //var parserService = serviceProvider.GetService<IParserService>();
+            var parserService = serviceProvider.GetService<IParserService>()!;
 
             try
             {
-                //await parserService.ParseWeekTimetables();
+                await parserService.ParseWeekTimetables();
                 // await parserService.ParseDayTimetables();
             }
             catch (Exception e)
