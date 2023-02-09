@@ -2,6 +2,7 @@
 using TeachersTimetable.Services;
 using TelegramBot_Timetable_Core;
 using TelegramBot_Timetable_Core.Config;
+using TelegramBot_Timetable_Core.Services;
 
 namespace TeachersTimetable
 {

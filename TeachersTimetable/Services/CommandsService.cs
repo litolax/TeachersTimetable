@@ -1,10 +1,11 @@
-﻿using TeachersTimetable.Config;
-using TeachersTimetable.Models;
+﻿using TeachersTimetable.Models;
 using Telegram.BotAPI;
 using Telegram.BotAPI.AvailableMethods;
 using Telegram.BotAPI.AvailableTypes;
 using TelegramBot_Timetable_Core.Config;
 using TelegramBot_Timetable_Core;
+using TelegramBot_Timetable_Core.Models;
+using TelegramBot_Timetable_Core.Services;
 
 namespace TeachersTimetable.Services
 {

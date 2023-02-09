@@ -1,12 +1,12 @@
 ﻿using System.Text.RegularExpressions;
 using MongoDB.Driver;
-using TeachersTimetable.Config;
 using Telegram.BotAPI;
 using Telegram.BotAPI.AvailableMethods;
 using Telegram.BotAPI.AvailableTypes;
 using Telegram.BotAPI.GettingUpdates;
 using User = TeachersTimetable.Models.User;
 using TelegramBot_Timetable_Core.Config;
+using TelegramBot_Timetable_Core.Services;
 
 namespace TeachersTimetable.Services
 {

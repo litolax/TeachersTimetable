@@ -6,7 +6,6 @@ using OpenQA.Selenium.Interactions;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Processing;
-using TeachersTimetable.Config;
 using TeachersTimetable.Models;
 using Telegram.BotAPI;
 using Telegram.BotAPI.AvailableMethods;
@@ -14,6 +13,7 @@ using Telegram.BotAPI.AvailableTypes;
 using Timer = System.Timers.Timer;
 using User = Telegram.BotAPI.AvailableTypes.User;
 using TelegramBot_Timetable_Core.Config;
+using TelegramBot_Timetable_Core.Services;
 
 namespace TeachersTimetable.Services;
 
@@ -30,9 +30,10 @@ public interface IParserService
 public class ParserService : IParserService
 {
     private readonly IMongoService _mongoService;
-    
-    private const string WeekUrl = "https://mgkct.minskedu.gov.by/персоналии/преподавателям/расписание-занятий-на-неделю";
-    
+
+    private const string WeekUrl =
+        "https://mgkct.minskedu.gov.by/персоналии/преподавателям/расписание-занятий-на-неделю";
+
     public List<string> Teachers { get; } = new()
     {
         "Амброжи Н. М.",
@@ -133,18 +134,18 @@ public class ParserService : IParserService
         "Щуко О. И.",
         "Эльканович А. Ф.",
     };
-    
-    public List<Timetable>? Timetables { get; set; } = new();
-    
+
+    private List<Timetable>? Timetables { get; set; } = new();
+
     private string LastDayHtmlContent { get; set; }
     private string LastWeekHtmlContent { get; set; }
-    
-    private bool _weekParseStarted = false;
+
+    private bool _weekParseStarted;
 
     public ParserService(IMongoService mongoService)
     {
         this._mongoService = mongoService;
-        
+
         // var parseDayTimer = new Timer(10000)
         // {
         //     AutoReset = true, Enabled = true
@@ -153,14 +154,16 @@ public class ParserService : IParserService
         // {
         //     await this.NewDayTimetableCheck();
         // };
-        
+
         var parseWeekTimer = new Timer(100_000)
         {
             AutoReset = true, Enabled = true
         };
         parseWeekTimer.Elapsed += (sender, args) =>
         {
-            _ = this.NewWeekTimetableCheck();
+            _ = this.NewWeekTimetableCheck()
+                .ContinueWith((t) => { Console.WriteLine(t.Exception?.InnerException); },
+                    TaskContinuationOptions.OnlyOnFaulted);
         };
     }
 
@@ -233,7 +236,7 @@ public class ParserService : IParserService
 
                     lessons.RemoveRange(0, count);
                     lessons.Reverse();
-                    
+
                     teachersAndLessons.Add(t[i].ChildNodes[3].InnerText.Trim(), lessons);
                 }
 
@@ -247,9 +250,9 @@ public class ParserService : IParserService
                 });
             }
         }
-        catch
+        catch (Exception e)
         {
-            //
+            Console.WriteLine(e);
         }
 
 
@@ -271,19 +274,19 @@ public class ParserService : IParserService
 
     public async Task ParseWeekTimetables()
     {
-        if (_weekParseStarted) return;
-        _weekParseStarted = true;
-        
+        if (this._weekParseStarted) return;
+        this._weekParseStarted = true;
+
         var web = new HtmlWeb();
         var doc = web.Load(WeekUrl);
-        
+
         var content = doc.DocumentNode.SelectNodes("//div/div/div/div/div/div").FirstOrDefault();
         if (content != default) this.LastWeekHtmlContent = content.InnerText;
 
         var teachers = doc.DocumentNode.SelectNodes("//h2");
-        if (teachers is null) 
+        if (teachers is null)
         {
-            _weekParseStarted = false;
+            this._weekParseStarted = false;
             return;
         }
 
@@ -294,11 +297,11 @@ public class ParserService : IParserService
             var dbTables = (await dateDbCollection.FindAsync(d => true)).ToList();
 
             var options = new ChromeOptions();
-            
+
             options.AddArgument("headless");
             options.AddArgument("--no-sandbox");
             options.AddArguments("--disable-dev-shm-usage");
-            
+
             var driver = new ChromeDriver(options);
 
             foreach (var teacher in this.Teachers)
@@ -323,14 +326,15 @@ public class ParserService : IParserService
                 image.Mutate(x => x.Resize((int)(image.Width / 1.5), (int)(image.Height / 1.5)));
                 await image.SaveAsPngAsync(filePath);
             }
-        
+
             driver.Close();
             driver.Quit();
-           
+
             if (!dbTables.Exists(table => table.Date.Trim() == newDate))
             {
-                await dateDbCollection.InsertOneAsync(new Timetable() {Date = newDate});
+                await dateDbCollection.InsertOneAsync(new Timetable() { Date = newDate });
             }
+
             //await this.SendNotificationsAboutWeekTimetable();
             _weekParseStarted = false;
         }
@@ -357,13 +361,15 @@ public class ParserService : IParserService
                 try
                 {
                     await bot.SendMessageAsync(user.UserId, $"У преподавателя {user.Teacher} нет пар");
-                    return;
+                    continue;
                 }
                 catch (Exception e)
                 {
                     Console.WriteLine(e);
+                    continue;
                 }
             }
+
             foreach (var timetable in this.Timetables)
             {
                 var message = timetable.Date + "\n\n";
@@ -375,6 +381,7 @@ public class ParserService : IParserService
                         message = $"У преподавателя {user.Teacher} нет пар на {timetable.Date}";
                         continue;
                     }
+
                     message += $"Преподаватель: {user.Teacher}\n";
                     foreach (var lesson in lessons)
                     {
@@ -403,7 +410,7 @@ public class ParserService : IParserService
         var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
         var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First();
         if (user is null) return;
-        
+
         //todo спилить
         await bot.SendMessageAsync(user.UserId, $"Дневное расписание временно недоступно");
         return;
@@ -421,7 +428,7 @@ public class ParserService : IParserService
 
             return;
         }
-        
+
         if (this.Timetables is null)
         {
             try
@@ -434,6 +441,7 @@ public class ParserService : IParserService
                 Console.WriteLine(e);
             }
         }
+
         foreach (var timetable in this.Timetables)
         {
             var message = timetable.Date + "\n\n";
@@ -445,6 +453,7 @@ public class ParserService : IParserService
                     message = $"У преподавателя {user.Teacher} нет пар на {timetable.Date}";
                     continue;
                 }
+
                 message += $"Преподаватель: {user.Teacher}\n";
                 foreach (var lesson in lessons)
                 {
@@ -512,7 +521,7 @@ public class ParserService : IParserService
             }
         }
     }
-    
+
     public async Task SendNotificationsAboutWeekTimetable()
     {
         var config = new Config<MainConfig>();
@@ -522,21 +531,19 @@ public class ParserService : IParserService
         var users = (await userCollection.FindAsync(u => true)).ToList();
         if (users is null) return;
 
-        foreach (var user in users)
+        var tasks = (from user in users where user.Teacher is not null && user.Notifications select 
+            bot.SendMessageAsync(user.UserId, "Обновлена страница расписания на неделю")).Cast<Task>().ToList();
+
+        try
         {
-            if (user.Teacher is null || !user.Notifications) continue;
-            
-            try
-            {
-                await bot.SendMessageAsync(user.UserId, "Обновлена страница расписания на неделю");
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-            }
+            await Task.WhenAll(tasks);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
         }
     }
-    
+
     // private async Task NewDayTimetableCheck()
     // {
     //     var url = "http://mgke.minsk.edu.by/ru/main.aspx?guid=3821";
@@ -546,15 +553,15 @@ public class ParserService : IParserService
     //
     //     await this.ParseDayTimetables();
     // }
-    
+
     private async Task NewWeekTimetableCheck()
     {
         var web = new HtmlWeb();
         var doc = web.Load(WeekUrl);
-        
+
         var content = doc.DocumentNode.SelectNodes("//div/div/div/div/div/div").FirstOrDefault();
         if (content == default) return;
-        
+
         if (this.LastWeekHtmlContent == content.InnerText) return;
 
         _ = this.ParseWeekTimetables();
