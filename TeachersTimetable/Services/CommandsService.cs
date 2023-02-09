@@ -57,6 +57,12 @@ namespace TeachersTimetable.Services
                         $"Вы пользуетесь ботом, который поможет узнать Вам актуальное расписание преподавателей МГКЦТ.\nСоздатель @litolax"));
                     break;
                 }
+                case "/tos":
+                {
+                    this._botService.SendMessage(new SendMessageArgs(sender.Id,
+                        $"Используя бота вы подтверждаете, что автор не несет за вас и ваши действия никакой ответственности"));
+                    break;
+                }
                 case "Посмотреть расписание на день":
                 {
                     await this._parserService.SendDayTimetable(sender);
