@@ -10,8 +10,6 @@
     <ItemGroup>
       <PackageReference Include="HtmlAgilityPack" Version="1.11.46" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="7.0.0" />
-      <PackageReference Include="MongoDB.Bson" Version="2.19.0" />
-      <PackageReference Include="MongoDB.Driver" Version="2.19.0" />
       <PackageReference Include="Selenium.Support" Version="4.7.0" />
       <PackageReference Include="Selenium.WebDriver" Version="4.7.0" />
       <PackageReference Include="SixLabors.ImageSharp" Version="2.1.3" />
@@ -19,7 +17,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\TelegramBot-Timetable-Core\TelegramBot-Timetable-Core\TelegramBot-Timetable-Core.csproj" />
+      <ProjectReference Include="..\TelegramBot-Timetable-Core\TelegramBot-Timetable-Core.csproj" />
     </ItemGroup>
 
 </Project>

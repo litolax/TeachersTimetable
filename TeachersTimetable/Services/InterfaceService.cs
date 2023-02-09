@@ -1,42 +1,42 @@
 ﻿using System.Text.RegularExpressions;
 using MongoDB.Driver;
-using TeachersTimetable.Config;
-using Telegram.BotAPI;
 using Telegram.BotAPI.AvailableMethods;
 using Telegram.BotAPI.AvailableTypes;
-using Telegram.BotAPI.GettingUpdates;
 using User = TeachersTimetable.Models.User;
+using TelegramBot_Timetable_Core.Services;
 
 namespace TeachersTimetable.Services
 {
     public interface IInterfaceService
     {
-        Task OpenMainMenu(Update update);
-        Task NotifyAllUsers(Update update);
-        Task HelpCommand(Telegram.BotAPI.AvailableTypes.User telegramUser);
+        Task OpenMainMenu(Message message);
+        Task NotifyAllUsers(Message message);
     }
 
     public class InterfaceService : IInterfaceService
     {
         private readonly IMongoService _mongoService;
         private readonly IAccountService _accountService;
+        private readonly IBotService _botService;
 
         private static readonly Regex SayRE = new(@"\/sayall(.+)", RegexOptions.Compiled);
 
-        public InterfaceService(IMongoService mongoService, IAccountService accountService)
+        public InterfaceService(IMongoService mongoService, IAccountService accountService, IBotService botService)
         {
             this._mongoService = mongoService;
             this._accountService = accountService;
+            this._botService = botService;
         }
 
-        public async Task OpenMainMenu(Update update)
+        public async Task OpenMainMenu(Message message)
         {
-            var config = new Config<MainConfig>();
-            var bot = new BotClient(config.Entries.Token);
+            if (message.From is not { } sender) return;
 
             var userCollection = this._mongoService.Database.GetCollection<User>("Users");
-            var user = (await userCollection.FindAsync(u => u.UserId == update.Message.From!.Id)).FirstOrDefault();
-            if (user == default) user = await this._accountService.CreateAccount(update.Message.From!);
+            var user = (await userCollection.FindAsync(u => u.UserId == sender.Id)).FirstOrDefault() ??
+                       await this._accountService.CreateAccount(sender);
+
+            if (user is null) return;
 
             var keyboard = new ReplyKeyboardMarkup
             {
@@ -56,7 +56,7 @@ namespace TeachersTimetable.Services
                     },
                     new[]
                     {
-                        user!.Notifications
+                        user.Notifications
                             ? new KeyboardButton("Отписаться от рассылки")
                             : new KeyboardButton("Подписаться на рассылку")
                     }
@@ -65,49 +65,47 @@ namespace TeachersTimetable.Services
                 InputFieldPlaceholder = "Выберите действие"
             };
 
-            await bot.SendMessageAsync(update.Message.From!.Id, "Вы открыли меню.", replyMarkup: keyboard);
+            this._botService.SendMessage(new SendMessageArgs(sender.Id, "Вы открыли меню.")
+            {
+                ReplyMarkup = keyboard
+            });
         }
 
-        public async Task NotifyAllUsers(Update update)
+        public async Task NotifyAllUsers(Message msg)
         {
-            var sayRegex = SayRE.Match(update.Message.Text!);
+            var sayRegex = Match.Empty;
+
+            if (msg.Text is { } messageText)
+            {
+                sayRegex = SayRE.Match(messageText);
+            }
+            else if (msg.Caption is { } msgCaption)
+            {
+                sayRegex = SayRE.Match(msgCaption);
+            }
+
             if (sayRegex.Length <= 0) return;
 
             var message = sayRegex.Groups[1].Value.Trim();
-
-            var config = new Config<MainConfig>();
-            var bot = new BotClient(config.Entries.Token);
 
             var userCollection = this._mongoService.Database.GetCollection<User>("Users");
             var users = (await userCollection.FindAsync(u => true)).ToList();
             if (users is null || users.Count <= 0) return;
 
+            var tasks = new List<Task>();
+
             foreach (var user in users)
             {
-                try
-                {
-                    await bot.SendMessageAsync(user.UserId, $"Уведомление: {message}");
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e);
-                }
-            }
-        }
+                tasks.Add(this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, $"Уведомление: {message}")));
 
-        public async Task HelpCommand(Telegram.BotAPI.AvailableTypes.User telegramUser)
-        {
-            var config = new Config<MainConfig>();
-            var bot = new BotClient(config.Entries.Token);
-            
-            try
-            {
-                await bot.SendMessageAsync(telegramUser.Id, $"Вы пользуетесь ботом, который поможет узнать Вам актуальное расписание преподавателей МГКЭ.\nСоздатель @litolax");
+                // if (msg.Photo is null) continue;
+                // foreach (var photo in msg.Photo)
+                // {
+                //     tasks.Add(this._botService.SendPhotoAsync(new SendPhotoArgs(user.UserId, photo.FileId)));
+                // }
             }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-            }
+
+            await Task.WhenAll(tasks);
         }
     }
 }

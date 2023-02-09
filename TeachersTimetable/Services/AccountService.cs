@@ -1,10 +1,9 @@
 ﻿using MongoDB.Bson;
 using MongoDB.Driver;
-using TeachersTimetable.Config;
-using Telegram.BotAPI;
 using Telegram.BotAPI.AvailableMethods;
 using Telegram.BotAPI.AvailableTypes;
 using User = Telegram.BotAPI.AvailableTypes.User;
+using TelegramBot_Timetable_Core.Services;
 
 namespace TeachersTimetable.Services
 {
@@ -20,11 +19,13 @@ namespace TeachersTimetable.Services
     {
         private readonly IMongoService _mongoService;
         private readonly IParserService _parserService;
+        private readonly IBotService _botService;
 
-        public AccountService(IMongoService mongoService, IParserService parserService)
+        public AccountService(IMongoService mongoService, IParserService parserService, IBotService botService)
         {
             this._mongoService = mongoService;
             this._parserService = parserService;
+            this._botService = botService;
         }
 
         public async Task<Models.User?> CreateAccount(User telegramUser)
@@ -33,11 +34,10 @@ namespace TeachersTimetable.Services
 
             var users = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList();
             if (users.Count >= 1) return null;
-            
+
             var user = new Models.User(telegramUser.Id, telegramUser.Username, telegramUser.FirstName,
-                telegramUser.LastName) {Id = ObjectId.GenerateNewId()};
-         
-            
+                telegramUser.LastName) { Id = ObjectId.GenerateNewId() };
+
             await userCollection.InsertOneAsync(user);
             return user;
         }
@@ -45,10 +45,8 @@ namespace TeachersTimetable.Services
         public async Task<bool> ChangeTeacher(User telegramUser, string? teacherName)
         {
             if (teacherName is null) return false;
-            var config = new Config<MainConfig>();
-            var bot = new BotClient(config.Entries.Token);
-            
-            string correctTeacherName = string.Empty;
+
+            var correctTeacherName = string.Empty;
             foreach (var teacher in this._parserService.Teachers)
             {
                 if (!teacher.ToLower().Trim().Contains(teacherName.ToLower().Trim())) continue;
@@ -58,62 +56,41 @@ namespace TeachersTimetable.Services
 
             if (correctTeacherName == string.Empty)
             {
-                try
-                {
-                    await bot.SendMessageAsync(telegramUser.Id, $"Преподаватель не найден");
-                    return false;
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e);
-                }
+                this._botService.SendMessage(new SendMessageArgs(telegramUser.Id, $"Преподаватель не найден"));
+                return false;
             }
 
             var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
-            var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First() ?? await CreateAccount(telegramUser);
+            var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First() ??
+                       await CreateAccount(telegramUser);
 
             user!.Teacher = correctTeacherName;
             var update = Builders<Models.User>.Update.Set(u => u.Teacher, user.Teacher);
             await userCollection.UpdateOneAsync(u => u.UserId == telegramUser.Id, update);
 
-            try
-            {
-                await bot.SendMessageAsync(telegramUser.Id, $"Вы успешно подписались на расписание преподавателя {correctTeacherName}");
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-            }
+            this._botService.SendMessage(new SendMessageArgs(telegramUser.Id,
+                $"Вы успешно подписались на расписание преподавателя {correctTeacherName}"));
 
             return true;
         }
 
         public async Task SubscribeNotifications(User telegramUser)
         {
-            var config = new Config<MainConfig>();
-            var bot = new BotClient(config.Entries.Token);
-
             var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
-            var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First() ?? await CreateAccount(telegramUser);
-            
+            var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First() ??
+                       await CreateAccount(telegramUser);
+
             if (user is null) return;
             if (user.Teacher is null)
             {
-                try
-                {
-                    await bot.SendMessageAsync(telegramUser.Id, $"Перед оформлением подписки на рассылку необходимо выбрать преподавателя");
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e);
-                }
-
+                this._botService.SendMessage(new SendMessageArgs(telegramUser.Id,
+                    $"Перед оформлением подписки на рассылку необходимо выбрать преподавателя"));
                 return;
             }
-            
+
             var update = Builders<Models.User>.Update.Set(u => u.Notifications, true);
             await userCollection.UpdateOneAsync(u => u.UserId == telegramUser.Id, update);
-            
+
             var keyboard = new ReplyKeyboardMarkup
             {
                 Keyboard = new[]
@@ -132,36 +109,31 @@ namespace TeachersTimetable.Services
                     },
                     new[]
                     {
-                       new KeyboardButton("Отписаться от рассылки") 
+                        new KeyboardButton("Отписаться от рассылки")
                     }
                 },
                 ResizeKeyboard = true,
                 InputFieldPlaceholder = "Выберите действие"
             };
-            
-            try
+
+            this._botService.SendMessage(new SendMessageArgs(telegramUser.Id,
+                $"Вы успешно подписались на расписание преподавателя {user.Teacher}")
             {
-                await bot.SendMessageAsync(telegramUser.Id, $"Вы успешно подписались на расписание преподавателя {user.Teacher}", replyMarkup: keyboard);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-            }
+                ReplyMarkup = keyboard
+            });
         }
-        
+
         public async Task UnSubscribeNotifications(User telegramUser)
         {
-            var config = new Config<MainConfig>();
-            var bot = new BotClient(config.Entries.Token);
-
             var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
-            var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First() ?? await CreateAccount(telegramUser);
-            
+            var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First() ??
+                       await CreateAccount(telegramUser);
+
             if (user is null) return;
 
             var update = Builders<Models.User>.Update.Set(u => u.Notifications, false);
             await userCollection.UpdateOneAsync(u => u.UserId == telegramUser.Id, update);
-            
+
             var keyboard = new ReplyKeyboardMarkup
             {
                 Keyboard = new[]
@@ -180,21 +152,17 @@ namespace TeachersTimetable.Services
                     },
                     new[]
                     {
-                        new KeyboardButton("Подписаться на рассылку")   
+                        new KeyboardButton("Подписаться на рассылку")
                     }
                 },
                 ResizeKeyboard = true,
                 InputFieldPlaceholder = "Выберите действие"
             };
-            
-            try
+
+            this._botService.SendMessage(new SendMessageArgs(telegramUser.Id, $"Вы успешно отменили подписку на расписание")
             {
-                await bot.SendMessageAsync(telegramUser.Id, $"Вы успешно отменили подписку на расписание", replyMarkup: keyboard);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-            }
+                ReplyMarkup = keyboard
+            });
         }
     }
 }

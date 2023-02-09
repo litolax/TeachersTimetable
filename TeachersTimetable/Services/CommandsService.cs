@@ -1,15 +1,13 @@
-﻿using TeachersTimetable.Config;
-using TeachersTimetable.Models;
-using Telegram.BotAPI;
-using Telegram.BotAPI.AvailableMethods;
-using Telegram.BotAPI.AvailableMethods.FormattingOptions;
-using Telegram.BotAPI.GettingUpdates;
+﻿using Telegram.BotAPI.AvailableMethods;
+using Telegram.BotAPI.AvailableTypes;
+using TelegramBot_Timetable_Core;
+using TelegramBot_Timetable_Core.Models;
+using TelegramBot_Timetable_Core.Services;
 
 namespace TeachersTimetable.Services
 {
     public interface ICommandsService
     {
-        void CommandsValidator(Update update);
     }
 
     public class CommandsService : ICommandsService
@@ -18,90 +16,96 @@ namespace TeachersTimetable.Services
         private readonly IAccountService _accountService;
         private readonly IParserService _parserService;
         private readonly IMongoService _mongoService;
+        private readonly IBotService _botService;
 
-        public CommandsService(IInterfaceService interfaceService, IAccountService accountService, IParserService parserService, IMongoService mongoService)
+        public CommandsService(IInterfaceService interfaceService, IAccountService accountService,
+            IParserService parserService, IMongoService mongoService, IBotService botService)
         {
+            Core.OnMessageReceive += OnMessageReceive;
+
             this._interfaceService = interfaceService;
             this._accountService = accountService;
             this._parserService = parserService;
             this._mongoService = mongoService;
+            this._botService = botService;
         }
 
-        public async void CommandsValidator(Update update)
+        private async void OnMessageReceive(Message message)
         {
-            var lastState = await this._mongoService.GetLastState(update.Message.Chat.Id);
+            if (message.From is not { } sender) return;
+            var messageText = message.Text;
+
+            var lastState = await this._mongoService.GetLastState(message.Chat.Id);
+
             if (lastState is not null && lastState == "changeTeacher")
             {
-                await this._accountService.ChangeTeacher(update.Message.From!, update.Message.Text);
-                this._mongoService.RemoveState(update.Message.Chat.Id);
+                await this._accountService.ChangeTeacher(sender, messageText);
+                this._mongoService.RemoveState(message.Chat.Id);
             }
-            
-            
-            switch (update.Message.Text)
+
+            switch (messageText)
             {
                 case "/start":
-                {
-                    await this._interfaceService.OpenMainMenu(update);
-                    break;
-                }
                 case "/menu":
                 {
-                    await this._interfaceService.OpenMainMenu(update);
+                    await this._interfaceService.OpenMainMenu(message);
                     break;
                 }
                 case "/help":
                 {
-                    if (update.Message.From is null) return;
-                    await this._interfaceService.HelpCommand(update.Message.From);
+                    this._botService.SendMessage(new SendMessageArgs(sender.Id,
+                        $"Вы пользуетесь ботом, который поможет узнать Вам актуальное расписание преподавателей МГКЦТ.\nСоздатель @litolax"));
                     break;
                 }
                 case "Посмотреть расписание на день":
                 {
-                    if (update.Message.From is null) return;
-                    await this._parserService.SendDayTimetable(update.Message.From);
+                    await this._parserService.SendDayTimetable(sender);
                     break;
                 }
                 case "Посмотреть расписание на неделю":
                 {
-                    if (update.Message.From is null) return;
-                    await this._parserService.SendWeekTimetable(update.Message.From);
+                    await this._parserService.SendWeekTimetable(sender);
                     break;
                 }
                 case "Сменить преподавателя":
                 {
-                    var config = new Config<MainConfig>();
-                    var bot = new BotClient(config.Entries.Token);
-                    try
-                    {
-                        await bot.SendMessageAsync(update.Message.From!.Id, $"Для оформления подписки на преподавателя отправьте его фамилию.");
-                        this._mongoService.CreateState(new UserState(update.Message.Chat.Id, "changeTeacher"));
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine(e);
-                    }
+                    this._botService.SendMessage(new SendMessageArgs(sender.Id,
+                        $"Для оформления подписки на преподавателя отправьте его фамилию."));
+
+                    this._mongoService.CreateState(new UserState(message.Chat.Id, "changeTeacher"));
+
                     break;
                 }
                 case "Подписаться на рассылку":
                 {
-                    if (update.Message.From is null) return;
-                    await this._accountService.SubscribeNotifications(update.Message.From);
+                    await this._accountService.SubscribeNotifications(sender);
                     break;
                 }
                 case "Отписаться от рассылки":
                 {
-                    if (update.Message.From is null) return;
-                    await this._accountService.UnSubscribeNotifications(update.Message.From);
+                    await this._accountService.UnSubscribeNotifications(sender);
                     break;
                 }
             }
 
-            if (update.Message.Text!.ToLower().Contains("/sayall") && update.Message.From!.Id == 698346968)
-                await this._interfaceService.NotifyAllUsers(update);
+            try
+            {
+                if (sender.Id != 698346968) return;
 
-            if (update.Message.Text!.ToLower().Contains("/notify") && update.Message.From!.Id == 698346968)
-                await this._parserService.SendNewDayTimetables();
-
+                if (messageText is not null)
+                {
+                    var lowerMessageText = messageText.ToLower();
+                    
+                    if (lowerMessageText.Contains("/notify"))
+                        await this._parserService.SendNewDayTimetables();
+                }
+                
+                await this._interfaceService.NotifyAllUsers(message);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
         }
     }
 }
