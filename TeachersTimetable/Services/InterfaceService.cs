@@ -2,7 +2,6 @@
 using MongoDB.Driver;
 using Telegram.BotAPI.AvailableMethods;
 using Telegram.BotAPI.AvailableTypes;
-using Telegram.BotAPI.GettingUpdates;
 using User = TeachersTimetable.Models.User;
 using TelegramBot_Timetable_Core.Services;
 
@@ -10,8 +9,8 @@ namespace TeachersTimetable.Services
 {
     public interface IInterfaceService
     {
-        Task OpenMainMenu(Update update);
-        Task NotifyAllUsers(Update update);
+        Task OpenMainMenu(Message message);
+        Task NotifyAllUsers(Message message);
     }
 
     public class InterfaceService : IInterfaceService
@@ -29,11 +28,15 @@ namespace TeachersTimetable.Services
             this._botService = botService;
         }
 
-        public async Task OpenMainMenu(Update update)
+        public async Task OpenMainMenu(Message message)
         {
+            if (message.From is not { } sender) return;
+
             var userCollection = this._mongoService.Database.GetCollection<User>("Users");
-            var user = (await userCollection.FindAsync(u => u.UserId == update.Message.From!.Id)).FirstOrDefault();
-            if (user == default) user = await this._accountService.CreateAccount(update.Message.From!);
+            var user = (await userCollection.FindAsync(u => u.UserId == sender.Id)).FirstOrDefault() ??
+                       await this._accountService.CreateAccount(sender);
+
+            if (user is null) return;
 
             var keyboard = new ReplyKeyboardMarkup
             {
@@ -53,7 +56,7 @@ namespace TeachersTimetable.Services
                     },
                     new[]
                     {
-                        user!.Notifications
+                        user.Notifications
                             ? new KeyboardButton("Отписаться от рассылки")
                             : new KeyboardButton("Подписаться на рассылку")
                     }
@@ -62,15 +65,25 @@ namespace TeachersTimetable.Services
                 InputFieldPlaceholder = "Выберите действие"
             };
 
-            this._botService.SendMessage(new SendMessageArgs(update.Message.From!.Id, "Вы открыли меню.")
+            this._botService.SendMessage(new SendMessageArgs(sender.Id, "Вы открыли меню.")
             {
                 ReplyMarkup = keyboard
             });
         }
 
-        public async Task NotifyAllUsers(Update update)
+        public async Task NotifyAllUsers(Message msg)
         {
-            var sayRegex = SayRE.Match(update.Message.Text!);
+            var sayRegex = Match.Empty;
+
+            if (msg.Text is { } messageText)
+            {
+                sayRegex = SayRE.Match(messageText);
+            }
+            else if (msg.Caption is { } msgCaption)
+            {
+                sayRegex = SayRE.Match(msgCaption);
+            }
+
             if (sayRegex.Length <= 0) return;
 
             var message = sayRegex.Groups[1].Value.Trim();
@@ -80,10 +93,16 @@ namespace TeachersTimetable.Services
             if (users is null || users.Count <= 0) return;
 
             var tasks = new List<Task>();
-            
+
             foreach (var user in users)
             {
                 tasks.Add(this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, $"Уведомление: {message}")));
+
+                // if (msg.Photo is null) continue;
+                // foreach (var photo in msg.Photo)
+                // {
+                //     tasks.Add(this._botService.SendPhotoAsync(new SendPhotoArgs(user.UserId, photo.FileId)));
+                // }
             }
 
             await Task.WhenAll(tasks);
