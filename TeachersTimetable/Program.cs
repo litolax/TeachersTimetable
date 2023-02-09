@@ -17,6 +17,7 @@ namespace TeachersTimetable
         {
             var serviceProvider = new ServiceCollection()
                 .AddSingleton<IMongoService, MongoService>()
+                .AddSingleton<IBotService, BotService>()
                 .AddSingleton<IParserService, ParserService>()
                 .AddSingleton<ICommandsService, CommandsService>()
                 .AddSingleton<IInterfaceService, InterfaceService>()

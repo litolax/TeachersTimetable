@@ -30,6 +30,7 @@ public interface IParserService
 public class ParserService : IParserService
 {
     private readonly IMongoService _mongoService;
+    private readonly IBotService _botService;
 
     private const string WeekUrl =
         "https://mgkct.minskedu.gov.by/персоналии/преподавателям/расписание-занятий-на-неделю";
@@ -142,9 +143,10 @@ public class ParserService : IParserService
 
     private bool _weekParseStarted;
 
-    public ParserService(IMongoService mongoService)
+    public ParserService(IMongoService mongoService, IBotService botService)
     {
         this._mongoService = mongoService;
+        this._botService = botService;
 
         // var parseDayTimer = new Timer(10000)
         // {
@@ -347,9 +349,6 @@ public class ParserService : IParserService
 
     public async Task SendNewDayTimetables()
     {
-        var config = new Config<MainConfig>();
-        var bot = new BotClient(config.Entries.Token);
-
         var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
         var users = (await userCollection.FindAsync(u => true)).ToList();
 
@@ -358,18 +357,11 @@ public class ParserService : IParserService
             if (!user.Notifications || user.Teacher is null) continue;
             if (this.Timetables is null)
             {
-                try
-                {
-                    await bot.SendMessageAsync(user.UserId, $"У преподавателя {user.Teacher} нет пар");
-                    continue;
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e);
-                    continue;
-                }
+                this._botService.SendMessage(new SendMessageArgs(user.UserId, $"У преподавателя {user.Teacher} нет пар"));
+                continue;
             }
 
+            var tasks = new List<Task>();
             foreach (var timetable in this.Timetables)
             {
                 var message = timetable.Date + "\n\n";
@@ -390,109 +382,89 @@ public class ParserService : IParserService
                     }
                 }
 
-                try
-                {
-                    await bot.SendMessageAsync(user.UserId, message);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e);
-                }
+                tasks.Add(this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, message)));
             }
+
+            await Task.WhenAll(tasks);
         }
     }
 
     public async Task SendDayTimetable(User telegramUser)
     {
-        var config = new Config<MainConfig>();
-        var bot = new BotClient(config.Entries.Token);
-
         var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
         var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First();
         if (user is null) return;
 
         //todo спилить
-        await bot.SendMessageAsync(user.UserId, $"Дневное расписание временно недоступно");
-        return;
+        await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, $"Дневное расписание временно недоступно"));
 
-        if (user.Teacher is null)
-        {
-            try
-            {
-                await bot.SendMessageAsync(user.UserId, "Вы еще не выбрали преподавателя");
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-            }
-
-            return;
-        }
-
-        if (this.Timetables is null)
-        {
-            try
-            {
-                await bot.SendMessageAsync(user.UserId, $"У преподавателя {user.Teacher} нет пар");
-                return;
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-            }
-        }
-
-        foreach (var timetable in this.Timetables)
-        {
-            var message = timetable.Date + "\n\n";
-            foreach (var dictionary in timetable.Table)
-            {
-                dictionary.TryGetValue(user.Teacher, out var lessons);
-                if (lessons is null)
-                {
-                    message = $"У преподавателя {user.Teacher} нет пар на {timetable.Date}";
-                    continue;
-                }
-
-                message += $"Преподаватель: {user.Teacher}\n";
-                foreach (var lesson in lessons)
-                {
-                    message +=
-                        $"Пара №{lesson.Index}\nГруппа: {lesson.Group.Trim()}\nКабинет: {lesson.Cabinet.Trim()}\n\n";
-                }
-            }
-
-            try
-            {
-                await bot.SendMessageAsync(user.UserId, message);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-            }
-        }
+        // if (user.Teacher is null)
+        // {
+        //     try
+        //     {
+        //         await bot.SendMessageAsync(user.UserId, "Вы еще не выбрали преподавателя");
+        //     }
+        //     catch (Exception e)
+        //     {
+        //         Console.WriteLine(e);
+        //     }
+        //
+        //     return;
+        // }
+        //
+        // if (this.Timetables is null)
+        // {
+        //     try
+        //     {
+        //         await bot.SendMessageAsync(user.UserId, $"У преподавателя {user.Teacher} нет пар");
+        //         return;
+        //     }
+        //     catch (Exception e)
+        //     {
+        //         Console.WriteLine(e);
+        //     }
+        // }
+        //
+        // foreach (var timetable in this.Timetables)
+        // {
+        //     var message = timetable.Date + "\n\n";
+        //     foreach (var dictionary in timetable.Table)
+        //     {
+        //         dictionary.TryGetValue(user.Teacher, out var lessons);
+        //         if (lessons is null)
+        //         {
+        //             message = $"У преподавателя {user.Teacher} нет пар на {timetable.Date}";
+        //             continue;
+        //         }
+        //
+        //         message += $"Преподаватель: {user.Teacher}\n";
+        //         foreach (var lesson in lessons)
+        //         {
+        //             message +=
+        //                 $"Пара №{lesson.Index}\nГруппа: {lesson.Group.Trim()}\nКабинет: {lesson.Cabinet.Trim()}\n\n";
+        //         }
+        //     }
+        //
+        //     try
+        //     {
+        //         await bot.SendMessageAsync(user.UserId, message);
+        //     }
+        //     catch (Exception e)
+        //     {
+        //         Console.WriteLine(e);
+        //     }
+        // }
     }
 
     public async Task SendWeekTimetable(User telegramUser)
     {
-        var config = new Config<MainConfig>();
-        var bot = new BotClient(config.Entries.Token);
-
         var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
         var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First();
         if (user is null) return;
 
         if (user.Teacher is null)
         {
-            try
-            {
-                await bot.SendMessageAsync(user.UserId, "Вы еще не выбрали преподавателя");
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-            }
-
+            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, "Вы еще не выбрали преподавателя"));
             return;
         }
 
@@ -503,7 +475,7 @@ public class ParserService : IParserService
         }
         catch
         {
-            await bot.SendMessageAsync(user.UserId, "Увы, данный преподаватель не найдена");
+            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, "Увы, данный преподаватель не найдена"));
             return;
         }
 
@@ -513,7 +485,7 @@ public class ParserService : IParserService
 
             try
             {
-                await bot.SendPhotoAsync(user.UserId, new InputFile(ms.ToArray(), $"./photo/{user.Teacher}.png"));
+                await this._botService.BotClient.SendPhotoAsync(user.UserId, new InputFile(ms.ToArray(), $"./photo/{user.Teacher}.png"));
             }
             catch (Exception e)
             {
@@ -524,24 +496,14 @@ public class ParserService : IParserService
 
     public async Task SendNotificationsAboutWeekTimetable()
     {
-        var config = new Config<MainConfig>();
-        var bot = new BotClient(config.Entries.Token);
-
         var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
         var users = (await userCollection.FindAsync(u => true)).ToList();
         if (users is null) return;
 
         var tasks = (from user in users where user.Teacher is not null && user.Notifications select 
-            bot.SendMessageAsync(user.UserId, "Обновлена страница расписания на неделю")).Cast<Task>().ToList();
+            this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, "Обновлена страница расписания на неделю"))).Cast<Task>().ToList();
 
-        try
-        {
-            await Task.WhenAll(tasks);
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e);
-        }
+        await Task.WhenAll(tasks);
     }
 
     // private async Task NewDayTimetableCheck()
