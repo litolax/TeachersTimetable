@@ -7,12 +7,10 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Processing;
 using TeachersTimetable.Models;
-using Telegram.BotAPI;
 using Telegram.BotAPI.AvailableMethods;
 using Telegram.BotAPI.AvailableTypes;
 using Timer = System.Timers.Timer;
 using User = Telegram.BotAPI.AvailableTypes.User;
-using TelegramBot_Timetable_Core.Config;
 using TelegramBot_Timetable_Core.Services;
 
 namespace TeachersTimetable.Services;
@@ -338,12 +336,12 @@ public class ParserService : IParserService
             }
 
             //await this.SendNotificationsAboutWeekTimetable();
-            _weekParseStarted = false;
+            this._weekParseStarted = false;
         }
         catch (Exception e)
         {
             Console.WriteLine(e);
-            _weekParseStarted = false;
+            this._weekParseStarted = false;
         }
     }
 
@@ -381,7 +379,7 @@ public class ParserService : IParserService
                             $"Пара №{lesson.Index}\nГруппа: {lesson.Group.Trim()}\nКабинет: {lesson.Cabinet.Trim()}\n\n";
                     }
                 }
-
+                
                 tasks.Add(this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, message)));
             }
 
@@ -483,14 +481,7 @@ public class ParserService : IParserService
         {
             await image.SaveAsync(ms, new PngEncoder());
 
-            try
-            {
-                await this._botService.BotClient.SendPhotoAsync(user.UserId, new InputFile(ms.ToArray(), $"./photo/{user.Teacher}.png"));
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-            }
+            await this._botService.SendPhotoAsync(new SendPhotoArgs(user.UserId, new InputFile(ms.ToArray(), $"./photo/{user.Teacher}.png")));
         }
     }
 
