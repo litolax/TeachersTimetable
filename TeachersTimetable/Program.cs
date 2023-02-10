@@ -42,7 +42,6 @@ namespace TeachersTimetable
             await Core.Start(new[]
             {
                 new BotCommand("start", "Запустить приложение"), new BotCommand("help", "Помощь"),
-                new BotCommand("menu", "Открыть меню")
             });
         }
     }
