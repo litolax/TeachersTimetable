@@ -11,8 +11,7 @@ namespace TeachersTimetable.Services
     {
         Task<Models.User?> CreateAccount(User telegramUser);
         Task<bool> ChangeTeacher(User telegramUser, string? teacher);
-        Task SubscribeNotifications(User telegramUser);
-        Task UnSubscribeNotifications(User telegramUser);
+        Task UpdateNotificationsStatus(User telegramUser);
     }
 
     public class AccountService : IAccountService
@@ -74,13 +73,14 @@ namespace TeachersTimetable.Services
             return true;
         }
 
-        public async Task SubscribeNotifications(User telegramUser)
+        public async Task UpdateNotificationsStatus(User telegramUser)
         {
             var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
             var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First() ??
                        await CreateAccount(telegramUser);
 
             if (user is null) return;
+            
             if (user.Teacher is null)
             {
                 this._botService.SendMessage(new SendMessageArgs(telegramUser.Id,
@@ -88,7 +88,8 @@ namespace TeachersTimetable.Services
                 return;
             }
 
-            var update = Builders<Models.User>.Update.Set(u => u.Notifications, true);
+            user.Notifications = !user.Notifications;
+            var update = Builders<Models.User>.Update.Set(u => u.Notifications, user.Notifications);
             await userCollection.UpdateOneAsync(u => u.UserId == telegramUser.Id, update);
 
             var keyboard = new ReplyKeyboardMarkup
@@ -109,57 +110,16 @@ namespace TeachersTimetable.Services
                     },
                     new[]
                     {
-                        new KeyboardButton("Отписаться от рассылки")
+                        user.Notifications ? new KeyboardButton("Отписаться от рассылки") : new KeyboardButton("Подписаться на рассылку")
                     }
                 },
                 ResizeKeyboard = true,
                 InputFieldPlaceholder = "Выберите действие"
             };
 
-            this._botService.SendMessage(new SendMessageArgs(telegramUser.Id,
-                $"Вы успешно подписались на расписание преподавателя {user.Teacher}")
-            {
-                ReplyMarkup = keyboard
-            });
-        }
-
-        public async Task UnSubscribeNotifications(User telegramUser)
-        {
-            var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
-            var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First() ??
-                       await CreateAccount(telegramUser);
-
-            if (user is null) return;
-
-            var update = Builders<Models.User>.Update.Set(u => u.Notifications, false);
-            await userCollection.UpdateOneAsync(u => u.UserId == telegramUser.Id, update);
-
-            var keyboard = new ReplyKeyboardMarkup
-            {
-                Keyboard = new[]
-                {
-                    new[]
-                    {
-                        new KeyboardButton("Посмотреть расписание на день"),
-                    },
-                    new[]
-                    {
-                        new KeyboardButton("Посмотреть расписание на неделю"),
-                    },
-                    new[]
-                    {
-                        new KeyboardButton("Сменить преподавателя"),
-                    },
-                    new[]
-                    {
-                        new KeyboardButton("Подписаться на рассылку")
-                    }
-                },
-                ResizeKeyboard = true,
-                InputFieldPlaceholder = "Выберите действие"
-            };
-
-            this._botService.SendMessage(new SendMessageArgs(telegramUser.Id, $"Вы успешно отменили подписку на расписание")
+            this._botService.SendMessage(new SendMessageArgs(telegramUser.Id, user.Notifications ? 
+                $"Вы успешно подписались на расписание преподавателя {user.Teacher}" :
+                $"Вы успешно отменили подписку на расписание преподавателя {user.Teacher}")
             {
                 ReplyMarkup = keyboard
             });

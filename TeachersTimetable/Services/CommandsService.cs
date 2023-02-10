@@ -46,21 +46,16 @@ namespace TeachersTimetable.Services
             switch (messageText)
             {
                 case "/start":
-                case "/menu":
                 {
                     await this._interfaceService.OpenMainMenu(message);
+                    this._botService.SendMessage(new SendMessageArgs(sender.Id,
+                        $"Используя бота вы подтверждаете, что автор не несет за вас и ваши действия никакой ответственности"));
                     break;
                 }
                 case "/help":
                 {
                     this._botService.SendMessage(new SendMessageArgs(sender.Id,
                         $"Вы пользуетесь ботом, который поможет узнать Вам актуальное расписание преподавателей МГКЦТ.\nСоздатель @litolax"));
-                    break;
-                }
-                case "/tos":
-                {
-                    this._botService.SendMessage(new SendMessageArgs(sender.Id,
-                        $"Используя бота вы подтверждаете, что автор не несет за вас и ваши действия никакой ответственности"));
                     break;
                 }
                 case "Посмотреть расписание на день":
@@ -83,20 +78,16 @@ namespace TeachersTimetable.Services
                     break;
                 }
                 case "Подписаться на рассылку":
-                {
-                    await this._accountService.SubscribeNotifications(sender);
-                    break;
-                }
                 case "Отписаться от рассылки":
                 {
-                    await this._accountService.UnSubscribeNotifications(sender);
+                    await this._accountService.UpdateNotificationsStatus(sender);
                     break;
                 }
             }
 
             try
             {
-                if (sender.Id != 698346968) return;
+                if (!Core.Administrators.Contains(sender.Id)) return;
 
                 if (messageText is not null)
                 {
