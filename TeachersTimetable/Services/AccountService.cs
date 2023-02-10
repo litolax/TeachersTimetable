@@ -9,7 +9,7 @@ namespace TeachersTimetable.Services
 {
     public interface IAccountService
     {
-        Task<Models.User?> CreateAccount(User telegramUser);
+        Task<TelegramBot_Timetable_Core.Models.User?> CreateAccount(User telegramUser);
         Task<bool> ChangeTeacher(User telegramUser, string? teacher);
         Task UpdateNotificationsStatus(User telegramUser);
     }
@@ -27,14 +27,14 @@ namespace TeachersTimetable.Services
             this._botService = botService;
         }
 
-        public async Task<Models.User?> CreateAccount(User telegramUser)
+        public async Task<TelegramBot_Timetable_Core.Models.User?> CreateAccount(User telegramUser)
         {
-            var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
+            var userCollection = this._mongoService.Database.GetCollection<TelegramBot_Timetable_Core.Models.User>("Users");
 
             var users = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList();
             if (users.Count >= 1) return null;
 
-            var user = new Models.User(telegramUser.Id, telegramUser.Username, telegramUser.FirstName,
+            var user = new TelegramBot_Timetable_Core.Models.User(telegramUser.Id, telegramUser.Username, telegramUser.FirstName,
                 telegramUser.LastName) { Id = ObjectId.GenerateNewId() };
 
             await userCollection.InsertOneAsync(user);
@@ -59,12 +59,12 @@ namespace TeachersTimetable.Services
                 return false;
             }
 
-            var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
+            var userCollection = this._mongoService.Database.GetCollection<TelegramBot_Timetable_Core.Models.User>("Users");
             var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First() ??
                        await CreateAccount(telegramUser);
 
             user!.Teacher = correctTeacherName;
-            var update = Builders<Models.User>.Update.Set(u => u.Teacher, user.Teacher);
+            var update = Builders<TelegramBot_Timetable_Core.Models.User>.Update.Set(u => u.Teacher, user.Teacher);
             await userCollection.UpdateOneAsync(u => u.UserId == telegramUser.Id, update);
 
             this._botService.SendMessage(new SendMessageArgs(telegramUser.Id,
@@ -75,7 +75,7 @@ namespace TeachersTimetable.Services
 
         public async Task UpdateNotificationsStatus(User telegramUser)
         {
-            var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
+            var userCollection = this._mongoService.Database.GetCollection<TelegramBot_Timetable_Core.Models.User>("Users");
             var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First() ??
                        await CreateAccount(telegramUser);
 
@@ -89,7 +89,7 @@ namespace TeachersTimetable.Services
             }
 
             user.Notifications = !user.Notifications;
-            var update = Builders<Models.User>.Update.Set(u => u.Notifications, user.Notifications);
+            var update = Builders<TelegramBot_Timetable_Core.Models.User>.Update.Set(u => u.Notifications, user.Notifications);
             await userCollection.UpdateOneAsync(u => u.UserId == telegramUser.Id, update);
 
             var keyboard = new ReplyKeyboardMarkup

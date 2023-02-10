@@ -2,7 +2,7 @@
 using MongoDB.Driver;
 using Telegram.BotAPI.AvailableMethods;
 using Telegram.BotAPI.AvailableTypes;
-using User = TeachersTimetable.Models.User;
+using User = TelegramBot_Timetable_Core.Models.User;
 using TelegramBot_Timetable_Core.Services;
 
 namespace TeachersTimetable.Services
@@ -10,7 +10,6 @@ namespace TeachersTimetable.Services
     public interface IInterfaceService
     {
         Task OpenMainMenu(Message message);
-        Task NotifyAllUsers(Message message);
     }
 
     public class InterfaceService : IInterfaceService
@@ -19,6 +18,7 @@ namespace TeachersTimetable.Services
         private readonly IAccountService _accountService;
         private readonly IBotService _botService;
 
+        private Dictionary<string, List<PhotoSize>> _photos = new();
         private static readonly Regex SayRE = new(@"\/sayall(.+)", RegexOptions.Compiled);
 
         public InterfaceService(IMongoService mongoService, IAccountService accountService, IBotService botService)
@@ -69,43 +69,6 @@ namespace TeachersTimetable.Services
             {
                 ReplyMarkup = keyboard
             });
-        }
-
-        public async Task NotifyAllUsers(Message msg)
-        {
-            var sayRegex = Match.Empty;
-
-            if (msg.Text is { } messageText)
-            {
-                sayRegex = SayRE.Match(messageText);
-            }
-            else if (msg.Caption is { } msgCaption)
-            {
-                sayRegex = SayRE.Match(msgCaption);
-            }
-
-            if (sayRegex.Length <= 0) return;
-
-            var message = sayRegex.Groups[1].Value.Trim();
-
-            var userCollection = this._mongoService.Database.GetCollection<User>("Users");
-            var users = (await userCollection.FindAsync(u => true)).ToList();
-            if (users is null || users.Count <= 0) return;
-
-            var tasks = new List<Task>();
-
-            foreach (var user in users)
-            {
-                tasks.Add(this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, $"Уведомление: {message}")));
-
-                // if (msg.Photo is null) continue;
-                // foreach (var photo in msg.Photo)
-                // {
-                //     tasks.Add(this._botService.SendPhotoAsync(new SendPhotoArgs(user.UserId, photo.FileId)));
-                // }
-            }
-
-            await Task.WhenAll(tasks);
         }
     }
 }
