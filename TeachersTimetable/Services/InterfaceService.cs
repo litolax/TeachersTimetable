@@ -2,7 +2,7 @@
 using MongoDB.Driver;
 using Telegram.BotAPI.AvailableMethods;
 using Telegram.BotAPI.AvailableTypes;
-using User = TelegramBot_Timetable_Core.Models.User;
+using TelegramBot_Timetable_Core.Models;
 using TelegramBot_Timetable_Core.Services;
 
 namespace TeachersTimetable.Services
@@ -32,7 +32,7 @@ namespace TeachersTimetable.Services
         {
             if (message.From is not { } sender) return;
 
-            var userCollection = this._mongoService.Database.GetCollection<User>("Users");
+            var userCollection = this._mongoService.Database.GetCollection<TeachersUser>("Users");
             var user = (await userCollection.FindAsync(u => u.UserId == sender.Id)).FirstOrDefault() ??
                        await this._accountService.CreateAccount(sender);
 
