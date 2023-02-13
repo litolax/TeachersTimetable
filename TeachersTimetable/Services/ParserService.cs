@@ -1,4 +1,5 @@
-﻿using HtmlAgilityPack;
+﻿using System.Net;
+using HtmlAgilityPack;
 using MongoDB.Driver;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
@@ -12,6 +13,7 @@ using Telegram.BotAPI.AvailableTypes;
 using Timer = System.Timers.Timer;
 using User = Telegram.BotAPI.AvailableTypes.User;
 using TelegramBot_Timetable_Core.Services;
+using File = System.IO.File;
 
 namespace TeachersTimetable.Services;
 
@@ -32,6 +34,9 @@ public class ParserService : IParserService
 
     private const string WeekUrl =
         "https://mgkct.minskedu.gov.by/персоналии/преподавателям/расписание-занятий-на-неделю";
+    
+    private const string DayUrl =
+        "https://mgkct.minskedu.gov.by/персоналии/преподавателям/расписание-занятий-на-день";
 
     public List<string> Teachers { get; } = new()
     {
@@ -134,7 +139,7 @@ public class ParserService : IParserService
         "Эльканович А. Ф.",
     };
 
-    private List<Timetable>? Timetables { get; set; } = new();
+    private List<Timetable> Timetables { get; set; } = new();
 
     private string LastDayHtmlContent { get; set; }
     private string LastWeekHtmlContent { get; set; }
@@ -150,9 +155,9 @@ public class ParserService : IParserService
         // {
         //     AutoReset = true, Enabled = true
         // };
-        // parseDayTimer.Elapsed += async (sender, args) =>
+        // parseDayTimer.Elapsed += (sender, args) =>
         // {
-        //     await this.NewDayTimetableCheck();
+        //     this.NewDayTimetableCheck();
         // };
 
         var parseWeekTimer = new Timer(100_000)
@@ -161,9 +166,7 @@ public class ParserService : IParserService
         };
         parseWeekTimer.Elapsed += (sender, args) =>
         {
-            _ = this.NewWeekTimetableCheck()
-                .ContinueWith((t) => { Console.WriteLine(t.Exception?.InnerException); },
-                    TaskContinuationOptions.OnlyOnFaulted);
+            this.NewWeekTimetableCheck();
         };
     }
 
@@ -171,91 +174,54 @@ public class ParserService : IParserService
     {
         var timetablesCollection = this._mongoService.Database.GetCollection<Timetable>("DayTimetables");
         var dbTables = (await timetablesCollection.FindAsync(table => true)).ToList();
+        
         var url = "http://mgke.minsk.edu.by/ru/main.aspx?guid=3821";
         var web = new HtmlWeb();
         var doc = web.Load(url);
+        
         this.LastDayHtmlContent = doc.DocumentNode.InnerHtml;
+        
         var tables = doc.DocumentNode.SelectNodes("//table");
         this.Timetables = new List<Timetable>();
-        if (tables is null)
-        {
-            this.Timetables = null;
-            return;
-        }
-
+        
+        //if (mainBlock is null) return;
+        
         try
         {
-            foreach (var table in tables)
-            {
-                var teachersAndLessons = new Dictionary<string, List<Lesson>>();
-                var t = table.SelectNodes("./tbody/tr");
-                if (t is null)
-                {
-                    t = table.SelectNodes("./thead/tr");
-                    if (t is null) continue;
-                }
-
-                for (int i = 3; i < t.Count; i++)
-                {
-                    List<Lesson> lessons = new List<Lesson>();
-                    int number = 1;
-                    for (int j = 5; j < t[i].ChildNodes.Count; j += 4)
-                    {
-                        if (t[i].ChildNodes[j].InnerText.Contains("&nbsp;"))
-                        {
-                            lessons.Add(new Lesson()
-                            {
-                                Group = "-",
-                                Cabinet = "-",
-                                Index = number,
-                            });
-                            number++;
-                            continue;
-                        }
-
-                        lessons.Add(new Lesson()
-                        {
-                            Group = t[i].ChildNodes[j].InnerText.Contains("&nbsp;")
-                                ? "-"
-                                : t[i].ChildNodes[j].InnerText,
-                            Cabinet = t[i].ChildNodes[j + 2].InnerText.Contains("&nbsp;")
-                                ? "-"
-                                : t[i].ChildNodes[j + 2].InnerText,
-                            Index = number,
-                        });
-                        number++;
-                    }
-
-                    int count = 0;
-                    lessons.Reverse();
-                    foreach (var lesson in lessons)
-                    {
-                        if (lesson.Cabinet == "-" && lesson.Group == "-") count++;
-                        else break;
-                    }
-
-                    lessons.RemoveRange(0, count);
-                    lessons.Reverse();
-
-                    teachersAndLessons.Add(t[i].ChildNodes[3].InnerText.Trim(), lessons);
-                }
-
-                this.Timetables.Add(new Timetable()
-                {
-                    Date = table.ChildNodes[1].ChildNodes[1].ChildNodes[5].InnerText.Trim(),
-                    Table = new List<Dictionary<string, List<Lesson>>>()
-                    {
-                        teachersAndLessons
-                    }
-                });
-            }
+            //Console.WriteLine(mainBlock.InnerHtml);
         }
         catch (Exception e)
         {
             Console.WriteLine(e);
         }
+        
+        //var teachersAndLessons = new Dictionary<string, List<Lesson>>();
+        
+        
+        
+        //teachersAndLessons.Add(t[i].ChildNodes[3].InnerText.Trim(), lessons);
+        
+        // int count = 0;
+        // lessons.Reverse();
+        // foreach (var lesson in lessons)
+        // {
+        //     if (lesson.Cabinet == "-" && lesson.Group == "-") count++;
+        //     else break;
+        // }
+        //
+        // lessons.RemoveRange(0, count);
+        // lessons.Reverse();
 
-
+        
+        // this.Timetables.Add(new Timetable()
+        // {
+        //     Date = table.ChildNodes[1].ChildNodes[1].ChildNodes[5].InnerText.Trim(),
+        //     Table = new List<Dictionary<string, List<Lesson>>>()
+        //     {
+        //         teachersAndLessons
+        //     }
+        // });
+        
         bool hasNewTimetables = false;
         this.Timetables.ForEach(t =>
         {
@@ -497,17 +463,19 @@ public class ParserService : IParserService
         await Task.WhenAll(tasks);
     }
 
-    // private async Task NewDayTimetableCheck()
-    // {
-    //     var url = "http://mgke.minsk.edu.by/ru/main.aspx?guid=3821";
-    //     var web = new HtmlWeb();
-    //     var doc = web.Load(url);
-    //     if (this.LastDayHtmlContent == doc.DocumentNode.InnerHtml) return;
-    //
-    //     await this.ParseDayTimetables();
-    // }
+    private void NewDayTimetableCheck()
+    {
+        var web = new HtmlWeb();
+        var doc = web.Load(DayUrl);
+        if (this.LastDayHtmlContent == doc.DocumentNode.InnerHtml) return;
 
-    private async Task NewWeekTimetableCheck()
+        _ = this.ParseDayTimetables().ContinueWith((t) =>
+        {
+            Console.WriteLine(t.Exception?.InnerException);
+        }, TaskContinuationOptions.OnlyOnFaulted);
+    }
+
+    private void NewWeekTimetableCheck()
     {
         var web = new HtmlWeb();
         var doc = web.Load(WeekUrl);
@@ -517,6 +485,9 @@ public class ParserService : IParserService
 
         if (this.LastWeekHtmlContent == content.InnerText) return;
 
-        _ = this.ParseWeekTimetables();
+        _ = this.ParseWeekTimetables().ContinueWith((t) =>
+        {
+            Console.WriteLine(t.Exception?.InnerException);
+        }, TaskContinuationOptions.OnlyOnFaulted);
     }
 }
