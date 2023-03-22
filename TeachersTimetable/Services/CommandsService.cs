@@ -21,7 +21,7 @@ namespace TeachersTimetable.Services
         public CommandsService(IInterfaceService interfaceService, IAccountService accountService,
             IParserService parserService, IMongoService mongoService, IBotService botService)
         {
-            Core.OnMessageReceive += OnMessageReceive;
+            Core.OnMessageReceive += this.OnMessageReceive;
 
             this._interfaceService = interfaceService;
             this._accountService = accountService;

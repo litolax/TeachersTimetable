@@ -1,6 +1,6 @@
-﻿using System.Drawing;
-using OpenQA.Selenium;
+﻿using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
+using Size = System.Drawing.Size;
 
 namespace TeachersTimetable.Services;
 
@@ -27,5 +27,18 @@ public static class Utils
 
         var all = driver.FindElement(By.CssSelector("*"));
         driver.ExecuteScript("arguments[0].style='overflow-y: hidden; overflow-x: hidden;'", all);
+    }
+    
+    public static ChromeDriver CreateChromeDriver()
+    {
+        var service = ChromeDriverService.CreateDefaultService();
+        service.SuppressInitialDiagnosticInformation = true;
+        
+        var options = new ChromeOptions();
+        options.AddArgument("headless");
+        options.AddArgument("--no-sandbox");
+        options.AddArguments("--disable-dev-shm-usage");
+
+        return new ChromeDriver(service, options);
     }
 }
