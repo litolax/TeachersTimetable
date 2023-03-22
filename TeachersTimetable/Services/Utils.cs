@@ -1,4 +1,5 @@
-﻿using OpenQA.Selenium;
+﻿using System.Text.RegularExpressions;
+using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using Size = System.Drawing.Size;
 
@@ -6,6 +7,11 @@ namespace TeachersTimetable.Services;
 
 public static class Utils
 {
+    public static string HtmlTagsFix(string input)
+    {
+        return Regex.Replace(input, "<[^>]+>|&nbsp;", "").Trim();
+    }
+
     public static void ModifyUnnecessaryElementsOnWebsite(ref ChromeDriver driver)
     {
         var container = driver.FindElement(By.ClassName("main"));
@@ -18,26 +24,40 @@ public static class Utils
 
         var footer = driver.FindElement(By.Id("footer"));
         driver.ExecuteScript("arguments[0].style='display: none'", footer);
-            
+
         var breadcrumbs = driver.FindElement(By.ClassName("breadcrumbs"));
         driver.ExecuteScript("arguments[0].style='display: none'", breadcrumbs);
-            
+
         var pageShareButtons = driver.FindElement(By.ClassName("page_share_buttons"));
         driver.ExecuteScript("arguments[0].style='display: none'", pageShareButtons);
 
         var all = driver.FindElement(By.CssSelector("*"));
         driver.ExecuteScript("arguments[0].style='overflow-y: hidden; overflow-x: hidden;'", all);
     }
-    
+
     public static ChromeDriver CreateChromeDriver()
     {
         var service = ChromeDriverService.CreateDefaultService();
-        service.SuppressInitialDiagnosticInformation = true;
         
-        var options = new ChromeOptions();
-        options.AddArgument("headless");
+        service.EnableVerboseLogging = false;
+        service.SuppressInitialDiagnosticInformation = true;
+        service.HideCommandPromptWindow = true;
+        
+        var options = new ChromeOptions
+        {
+            PageLoadStrategy = PageLoadStrategy.Normal
+        };
+
         options.AddArgument("--no-sandbox");
-        options.AddArguments("--disable-dev-shm-usage");
+        options.AddArgument("--headless");
+        options.AddArgument("--disable-gpu");
+        options.AddArgument("--disable-crash-reporter");
+        options.AddArgument("--disable-extensions");
+        options.AddArgument("--disable-in-process-stack-traces");
+        options.AddArgument("--disable-logging");
+        options.AddArgument("--disable-dev-shm-usage");
+        options.AddArgument("--log-level=3");
+        options.AddArgument("--output=/dev/null");
 
         return new ChromeDriver(service, options);
     }

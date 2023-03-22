@@ -7,5 +7,5 @@ public class Timetable
 {
     public ObjectId Id { get; set; }
     public string Date { get; set; } = "";
-    [BsonIgnore] public List<Dictionary<string, List<Lesson>>> Table { get; set; } = new(); // Массив (учителя, пары)
+    [BsonIgnore] public List<TeacherInfo> TeacherInfos { get; set; } = new();
 }

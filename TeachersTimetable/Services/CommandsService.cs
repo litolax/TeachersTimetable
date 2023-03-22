@@ -119,7 +119,7 @@ namespace TeachersTimetable.Services
                     var lowerMessageText = messageText.ToLower();
                     
                     if (lowerMessageText.Contains("/notify"))
-                        await this._parserService.SendNewDayTimetables();
+                        await this._parserService.SendNewDayTimetables(null, true);
                 }
                 
                 await this._interfaceService.NotifyAllUsers(message);
