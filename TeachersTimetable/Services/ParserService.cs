@@ -17,9 +17,9 @@ namespace TeachersTimetable.Services;
 public interface IParserService
 {
     List<string> Teachers { get; }
-    Task SendNewDayTimetables(string? teacher, bool all = false);
+    Task SendNewDayTimetables(string? teacher, bool firstStart, bool all = false);
     Task SendDayTimetable(User telegramUser);
-    Task ParseDayTimetables();
+    Task ParseDayTimetables(bool firstStart = false);
     Task ParseWeekTimetables();
     Task SendWeekTimetable(User telegramUser);
 }
@@ -99,7 +99,6 @@ public class ParserService : IParserService
         "Поклад Т. И.",
         "Потапчик И. Г.",
         "Потес Р. И.",
-        "Потоцкий Д. С.",
         "Прокопович М. Е.",
         "Протасеня А. О.",
         "Пугач А. И.",
@@ -151,33 +150,36 @@ public class ParserService : IParserService
         this._botService = botService;
         this._config = config;
 
-        var parseDayTimer = new Timer(150_000)
+        var parseDayTimer = new Timer(600_000)
         {
             AutoReset = true, Enabled = true
         };
-        parseDayTimer.Elapsed += (sender, args) =>
-        {
-            _ = this.NewDayTimetableCheck()
+        parseDayTimer.Elapsed += async (sender, args) =>
+        { 
+            await this.NewDayTimetableCheck()
                 .ContinueWith((t) => { Console.WriteLine(t.Exception?.InnerException); },
                     TaskContinuationOptions.OnlyOnFaulted);
         };
 
-        var parseWeekTimer = new Timer(200_000)
+        var parseWeekTimer = new Timer(900_000)
         {
             AutoReset = true, Enabled = true
         };
-        parseWeekTimer.Elapsed += (sender, args) =>
+        parseWeekTimer.Elapsed += async (sender, args) =>
         {
-            _ = this.NewWeekTimetableCheck()
+            await this.NewWeekTimetableCheck()
                 .ContinueWith((t) => { Console.WriteLine(t.Exception?.InnerException); },
                     TaskContinuationOptions.OnlyOnFaulted);
         };
     }
 
-    public async Task ParseDayTimetables()
+    public async Task ParseDayTimetables(bool firstStart = false)
     {
-        if (this._dayParseStarted) return;
-        this._dayParseStarted = true;
+        lock (this)
+        {
+            if (this._dayParseStarted) return;
+            this._dayParseStarted = true;
+        }
 
         var driver = Utils.CreateChromeDriver();
         driver.Manage().Timeouts().PageLoad = new TimeSpan(0, 0, 20);
@@ -290,11 +292,11 @@ public class ParserService : IParserService
             TeacherInfos = new List<TeacherInfo>(teacherInfos)
         });
         teacherInfos.Clear();
-        await this.ValidateTimetableHashes();
+        await this.ValidateTimetableHashes(firstStart);
         this._dayParseStarted = false;
     }
 
-    private async Task ValidateTimetableHashes()
+    private async Task ValidateTimetableHashes(bool firstStart)
     {
         if (this.TempTimetable.Any(e => e.TeacherInfos.Count == 0)) return;
         var tempTimetable = new List<Timetable>(this.TempTimetable);
@@ -304,7 +306,7 @@ public class ParserService : IParserService
         {
             this.Timetable.Clear();
             this.Timetable = new List<Timetable>(tempTimetable);
-            await this.SendNewDayTimetables(null, true);
+            await this.SendNewDayTimetables(null, firstStart, true);
             tempTimetable.Clear();
             return;
         }
@@ -323,7 +325,7 @@ public class ParserService : IParserService
 
                 if (teacherInfo == default || tempLessons.Count != teacherInfo.Lessons.Count)
                 {
-                    _ = this.SendNewDayTimetables(tempTeacher);
+                    _ = this.SendNewDayTimetables(tempTeacher, firstStart, false);
                     continue;
                 }
 
@@ -333,7 +335,7 @@ public class ParserService : IParserService
                     var lesson = teacherInfo.Lessons[h];
 
                     if (tempLesson.GetHashCode() == lesson.GetHashCode()) continue;
-                    _ = this.SendNewDayTimetables(tempTeacher);
+                    _ = this.SendNewDayTimetables(tempTeacher, firstStart, false);
                     break;
                 }
             }
@@ -344,9 +346,20 @@ public class ParserService : IParserService
         tempTimetable.Clear();
     }
 
-    public async Task SendNewDayTimetables(string? teacher, bool all = false)
+    public async Task SendNewDayTimetables(string? teacher, bool firstStart, bool all = false)
     {
-        Console.WriteLine("Изменилось дневное расписание для: " + (all ? "Всех" : teacher));
+        if (firstStart) return;
+
+        if (this._config.Entries.Administrators is { } administrators)
+        {
+            var adminTelegramId = administrators.FirstOrDefault();
+            if (adminTelegramId != default)
+            {
+                this._botService.SendMessage(new SendMessageArgs(adminTelegramId,
+                    "Изменилось дневное расписание учителей для: " + (all ? "Всех" : teacher)));
+            }
+            
+        }
         
         var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
         var users = (await userCollection.FindAsync(u => all || u.Teacher == teacher)).ToList();
@@ -387,7 +400,7 @@ public class ParserService : IParserService
             await Task.WhenAll(tasks);
         }
     }
-
+    
     public async Task SendDayTimetable(User telegramUser)
     {
         var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
@@ -451,9 +464,12 @@ public class ParserService : IParserService
 
     public async Task ParseWeekTimetables()
     {
-        if (this._weekParseStarted) return;
-        this._weekParseStarted = true;
-
+        lock (this)
+        {
+            if (this._weekParseStarted) return;
+            this._weekParseStarted = true;
+        }
+        
         var web = new HtmlWeb();
         var doc = web.Load(WeekUrl);
 
@@ -492,9 +508,8 @@ public class ParserService : IParserService
                     actions.MoveToElement(element).Perform();
 
                     var screenshot = (driver as ITakesScreenshot).GetScreenshot();
-                    screenshot.SaveAsFile(filePath, ScreenshotImageFormat.Png);
 
-                    var image = await Image.LoadAsync(filePath);
+                    var image = Image.Load(screenshot.AsByteArray);
 
                     image.Mutate(x => x.Resize((int)(image.Width / 1.5), (int)(image.Height / 1.5)));
                     await image.SaveAsPngAsync(filePath);
@@ -593,10 +608,8 @@ public class ParserService : IParserService
 
         if (this.LastDayHtmlContent == content) return Task.CompletedTask;
 
-        _ = this.ParseDayTimetables().ContinueWith((t) => { Console.WriteLine(t.Exception?.InnerException); },
+        return this.ParseDayTimetables().ContinueWith((t) => { Console.WriteLine(t.Exception?.InnerException); },
             TaskContinuationOptions.OnlyOnFaulted);
-
-        return Task.FromResult(Task.CompletedTask);
     }
 
     private Task NewWeekTimetableCheck()
@@ -605,13 +618,11 @@ public class ParserService : IParserService
         var doc = web.Load(WeekUrl);
 
         var content = doc.DocumentNode.SelectNodes("//div/div/div/div/div/div").FirstOrDefault();
-        if (content == default) return Task.CompletedTask;;
+        if (content == default) return Task.CompletedTask;
 
         if (this.LastWeekHtmlContent == content.InnerText) return Task.CompletedTask;
 
-        _ = this.ParseWeekTimetables().ContinueWith((t) => { Console.WriteLine(t.Exception?.InnerException); },
+        return this.ParseWeekTimetables().ContinueWith((t) => { Console.WriteLine(t.Exception?.InnerException); },
             TaskContinuationOptions.OnlyOnFaulted);
-        
-        return Task.CompletedTask;
     }
 }
