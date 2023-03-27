@@ -610,6 +610,11 @@ public class ParserService : IParserService
 
     private async Task NewDayTimetableCheck()
     {
+        lock (this)
+        {
+            if (this._dayParseStarted) return;
+        }
+        
         var (driver, process) = Utils.CreateChromeDriver();
 
         driver.Navigate().GoToUrl(DayUrl);
@@ -635,6 +640,11 @@ public class ParserService : IParserService
 
     private async Task NewWeekTimetableCheck()
     {
+        lock (this)
+        {
+            if (this._weekParseStarted) return;
+        }
+        
         var (driver, process) = Utils.CreateChromeDriver();
         driver.Navigate().GoToUrl(WeekUrl);
 
