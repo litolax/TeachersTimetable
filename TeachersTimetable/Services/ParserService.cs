@@ -137,6 +137,7 @@ public class ParserService : IParserService
 
     private List<Timetable> _tempTimetable { get; set; } = new();
     private List<Timetable> _timetable { get; set; } = new();
+    private Dictionary<string, Image> _images { get; set; } = new();
 
     private string LastDayHtmlContent { get; set; }
     private string LastWeekHtmlContent { get; set; }
@@ -185,6 +186,7 @@ public class ParserService : IParserService
 
     public async Task ParseDayTimetables(bool firstStart = false)
     {
+        Console.WriteLine("Начато дневное расписание");
         lock (this)
         {
             if (this._dayParseStarted) return;
@@ -192,8 +194,6 @@ public class ParserService : IParserService
         }
 
         var driver = Utils.CreateChromeDriver();
-        driver.Manage().Timeouts().PageLoad = new TimeSpan(0, 0, 20);
-
         driver.Navigate().GoToUrl(DayUrl);
 
         var content = driver.FindElement(By.Id("wrapperTables"));
@@ -306,6 +306,7 @@ public class ParserService : IParserService
         teacherInfos.Clear();
         await this.ValidateTimetableHashes(firstStart);
         this._dayParseStarted = false;
+        Console.WriteLine("Завершено дневное расписание");
     }
 
     private async Task ValidateTimetableHashes(bool firstStart)
@@ -476,55 +477,46 @@ public class ParserService : IParserService
 
     public async Task ParseWeekTimetables()
     {
+        Console.WriteLine("Начато недельное расписание");
         lock (this)
         {
             if (this._weekParseStarted) return;
             this._weekParseStarted = true;
         }
 
-        var web = new HtmlWeb();
-        var doc = web.Load(WeekUrl);
+        var driver = Utils.CreateChromeDriver();
+        driver.Navigate().GoToUrl(WeekUrl);
 
-        var content = doc.DocumentNode.SelectNodes("//div/div/div/div/div/div").FirstOrDefault();
-        if (content != default) this.LastWeekHtmlContent = content.InnerText;
-
-        var teachers = doc.DocumentNode.SelectNodes("//h2");
-        if (teachers is null)
-        {
-            this._weekParseStarted = false;
-            return;
-        }
-
+        var content = driver.FindElement(By.ClassName("entry")).Text;
+        if (content != default) this.LastWeekHtmlContent = content;
+        
         try
         {
-            var newDate = doc.DocumentNode.SelectNodes("//h3")[0].InnerText.Trim();
-            var dateDbCollection = this._mongoService.Database.GetCollection<Timetable>("WeekTimetables");
-            var dbTables = (await dateDbCollection.FindAsync(d => true)).ToList();
-
-            var driver = Utils.CreateChromeDriver();
-
             foreach (var teacher in this.Teachers)
             {
                 try
                 {
-                    var filePath = $"./photo/{teacher}.png";
-
                     driver.Navigate().GoToUrl($"{WeekUrl}?teacher={teacher.Replace(" ", "+")}");
 
                     Utils.ModifyUnnecessaryElementsOnWebsite(ref driver);
 
-                    var element = driver.FindElements(By.TagName("h2")).FirstOrDefault();
+                    var element = driver.FindElement(By.TagName("h2"));
                     if (element == default) continue;
 
                     var actions = new Actions(driver);
                     actions.MoveToElement(element).Perform();
 
                     var screenshot = (driver as ITakesScreenshot).GetScreenshot();
+                    if (this._images.TryGetValue(teacher, out var oldImage))
+                    {
+                        oldImage.Dispose();
+                        this._images.Remove(teacher);
+                    }
 
                     var image = Image.Load(screenshot.AsByteArray);
-
                     image.Mutate(x => x.Resize((int)(image.Width / 1.5), (int)(image.Height / 1.5)));
-                    await image.SaveAsPngAsync(filePath);
+
+                    this._images.Add(teacher, image);
                 }
                 catch (Exception e)
                 {
@@ -544,13 +536,14 @@ public class ParserService : IParserService
             driver.Quit();
             driver.Dispose();
 
-            if (!dbTables.Exists(table => table.Date.Trim() == newDate))
-            {
-                await dateDbCollection.InsertOneAsync(new Timetable() { Date = newDate });
-            }
+            // if (!dbTables.Exists(table => table.Date.Trim() == newDate))
+            // {
+            //     await dateDbCollection.InsertOneAsync(new Timetable() { Date = newDate });
+            // }
 
             //await this.SendNotificationsAboutWeekTimetable();
             this._weekParseStarted = false;
+            Console.WriteLine("Завершено недельное расписание");
         }
         catch (Exception e)
         {
@@ -572,15 +565,11 @@ public class ParserService : IParserService
             return;
         }
 
-        Image? image;
-        try
+        this._images.TryGetValue(user.Teacher, out var image);
+        
+        if (image is null)
         {
-            image = await Image.LoadAsync($"./photo/{user.Teacher}.png");
-        }
-        catch
-        {
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
-                "Увы, данный преподаватель не найдена"));
+            this._botService.SendMessage(new SendMessageArgs(user.UserId, "Увы, данный преподаватель не найден"));
             return;
         }
 
@@ -588,8 +577,10 @@ public class ParserService : IParserService
         {
             await image.SaveAsync(ms, new PngEncoder());
 
-            await this._botService.SendPhotoAsync(new SendPhotoArgs(user.UserId,
-                new InputFile(ms.ToArray(), $"./photo/{user.Teacher}.png")));
+            this._botService.SendPhoto(new SendPhotoArgs(user.UserId,
+                new InputFile(ms.ToArray(), $"Teacher - {user.Teacher}")));
+            
+            await ms.DisposeAsync();
         }
     }
 
@@ -611,7 +602,6 @@ public class ParserService : IParserService
     private async Task NewDayTimetableCheck()
     {
         var driver = Utils.CreateChromeDriver();
-        driver.Manage().Timeouts().PageLoad = new TimeSpan(0, 0, 20);
 
         driver.Navigate().GoToUrl(DayUrl);
 
@@ -634,14 +624,15 @@ public class ParserService : IParserService
 
     private async Task NewWeekTimetableCheck()
     {
-        var web = new HtmlWeb();
-        var doc = web.Load(WeekUrl);
+        var driver = Utils.CreateChromeDriver();
+        driver.Navigate().GoToUrl(WeekUrl);
 
-        var content = doc.DocumentNode.SelectNodes("//div/div/div/div/div/div").FirstOrDefault();
-        if (content == default) return;
-
-        if (this.LastWeekHtmlContent == content.InnerText) return;
-
+        var content = driver.FindElement(By.ClassName("entry")).Text;
+        driver.Quit();
+        driver.Dispose();
+        
+        if (content == default || this.LastWeekHtmlContent == content) return;
+        
         try
         {
             await this.ParseWeekTimetables();

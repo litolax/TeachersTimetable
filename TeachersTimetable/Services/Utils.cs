@@ -59,6 +59,9 @@ public static class Utils
         options.AddArgument("--log-level=3");
         options.AddArgument("--output=/dev/null");
 
-        return new ChromeDriver(service, options);
+        var driver = new ChromeDriver(service, options);
+        driver.Manage().Timeouts().PageLoad = new TimeSpan(0, 0, 30);
+        
+        return driver;
     }
 }
