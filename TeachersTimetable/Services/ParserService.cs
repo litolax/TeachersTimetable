@@ -135,8 +135,8 @@ public class ParserService : IParserService
         "Эльканович А. Ф.",
     };
 
-    private List<Timetable> TempTimetable { get; set; } = new();
-    private List<Timetable> Timetable { get; set; } = new();
+    private List<Timetable> _tempTimetable { get; set; } = new();
+    private List<Timetable> _timetable { get; set; } = new();
 
     private string LastDayHtmlContent { get; set; }
     private string LastWeekHtmlContent { get; set; }
@@ -155,10 +155,15 @@ public class ParserService : IParserService
             AutoReset = true, Enabled = true
         };
         parseDayTimer.Elapsed += async (sender, args) =>
-        { 
-            await this.NewDayTimetableCheck()
-                .ContinueWith((t) => { Console.WriteLine(t.Exception?.InnerException); },
-                    TaskContinuationOptions.OnlyOnFaulted);
+        {
+            try
+            {
+                await this.NewDayTimetableCheck();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
         };
 
         var parseWeekTimer = new Timer(900_000)
@@ -167,9 +172,14 @@ public class ParserService : IParserService
         };
         parseWeekTimer.Elapsed += async (sender, args) =>
         {
-            await this.NewWeekTimetableCheck()
-                .ContinueWith((t) => { Console.WriteLine(t.Exception?.InnerException); },
-                    TaskContinuationOptions.OnlyOnFaulted);
+            try
+            {
+                await this.NewWeekTimetableCheck();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
         };
     }
 
@@ -191,13 +201,14 @@ public class ParserService : IParserService
         if (content is null)
         {
             this._dayParseStarted = false;
+            driver.Quit();
             driver.Dispose();
             return;
         }
 
         this.LastDayHtmlContent = content.Text;
         List<TeacherInfo> teacherInfos = new List<TeacherInfo>();
-        this.TempTimetable.Clear();
+        this._tempTimetable.Clear();
 
         var teachersAndLessons = content.FindElements(By.XPath(".//div")).ToList();
 
@@ -257,6 +268,7 @@ public class ParserService : IParserService
             }
         }
 
+        driver.Quit();
         driver.Dispose();
 
         foreach (var teacherInfo in teacherInfos)
@@ -287,7 +299,7 @@ public class ParserService : IParserService
             teacherInfo.Lessons = teacherInfo.Lessons.OrderBy(l => l.Index).ToList();
         }
 
-        this.TempTimetable.Add(new()
+        this._tempTimetable.Add(new()
         {
             TeacherInfos = new List<TeacherInfo>(teacherInfos)
         });
@@ -298,14 +310,14 @@ public class ParserService : IParserService
 
     private async Task ValidateTimetableHashes(bool firstStart)
     {
-        if (this.TempTimetable.Any(e => e.TeacherInfos.Count == 0)) return;
-        var tempTimetable = new List<Timetable>(this.TempTimetable);
-        this.TempTimetable.Clear();
+        if (this._tempTimetable.Any(e => e.TeacherInfos.Count == 0)) return;
+        var tempTimetable = new List<Timetable>(this._tempTimetable);
+        this._tempTimetable.Clear();
 
-        if (tempTimetable.Count > this.Timetable.Count)
+        if (tempTimetable.Count > this._timetable.Count)
         {
-            this.Timetable.Clear();
-            this.Timetable = new List<Timetable>(tempTimetable);
+            this._timetable.Clear();
+            this._timetable = new List<Timetable>(tempTimetable);
             await this.SendNewDayTimetables(null, firstStart, true);
             tempTimetable.Clear();
             return;
@@ -314,7 +326,7 @@ public class ParserService : IParserService
         for (var i = 0; i < tempTimetable.Count; i++)
         {
             var tempDay = tempTimetable[i];
-            var day = this.Timetable[i];
+            var day = this._timetable[i];
 
             for (int j = 0; j < tempDay.TeacherInfos.Count; j++)
             {
@@ -341,8 +353,8 @@ public class ParserService : IParserService
             }
         }
 
-        this.Timetable.Clear();
-        this.Timetable = new List<Timetable>(tempTimetable);
+        this._timetable.Clear();
+        this._timetable = new List<Timetable>(tempTimetable);
         tempTimetable.Clear();
     }
 
@@ -358,15 +370,14 @@ public class ParserService : IParserService
                 this._botService.SendMessage(new SendMessageArgs(adminTelegramId,
                     "Изменилось дневное расписание учителей для: " + (all ? "Всех" : teacher)));
             }
-            
         }
-        
+
         var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
         var users = (await userCollection.FindAsync(u => all || u.Teacher == teacher)).ToList();
 
         foreach (var user in users.Where(user => user.Notifications && user.Teacher is not null))
         {
-            if (this.Timetable.Count < 1)
+            if (this._timetable.Count < 1)
             {
                 this._botService.SendMessage(new SendMessageArgs(user.UserId, $"У {user.Teacher} нет пар"));
                 continue;
@@ -374,7 +385,7 @@ public class ParserService : IParserService
 
             var tasks = new List<Task>();
 
-            foreach (var day in this.Timetable)
+            foreach (var day in this._timetable)
             {
                 var message = day.Date + "\n";
 
@@ -400,7 +411,7 @@ public class ParserService : IParserService
             await Task.WhenAll(tasks);
         }
     }
-    
+
     public async Task SendDayTimetable(User telegramUser)
     {
         var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
@@ -409,17 +420,18 @@ public class ParserService : IParserService
 
         if (user.Teacher is null)
         {
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, "Вы еще не выбрали преподавателя"));
+            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
+                "Вы еще не выбрали преподавателя"));
             return;
         }
 
-        if (this.Timetable.Count < 1)
+        if (this._timetable.Count < 1)
         {
             await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, $"У {user.Teacher} нет пар"));
             return;
         }
 
-        foreach (var day in this.Timetable)
+        foreach (var day in this._timetable)
         {
             string message = day.Date + "\n";
 
@@ -441,7 +453,7 @@ public class ParserService : IParserService
             });
         }
     }
-    
+
     private string CreateDayTimetableMessage(TeacherInfo teacherInfo)
     {
         string message = string.Empty;
@@ -469,7 +481,7 @@ public class ParserService : IParserService
             if (this._weekParseStarted) return;
             this._weekParseStarted = true;
         }
-        
+
         var web = new HtmlWeb();
         var doc = web.Load(WeekUrl);
 
@@ -529,6 +541,7 @@ public class ParserService : IParserService
                 }
             }
 
+            driver.Quit();
             driver.Dispose();
 
             if (!dbTables.Exists(table => table.Date.Trim() == newDate))
@@ -595,7 +608,7 @@ public class ParserService : IParserService
         await Task.WhenAll(tasks);
     }
 
-    private Task NewDayTimetableCheck()
+    private async Task NewDayTimetableCheck()
     {
         var driver = Utils.CreateChromeDriver();
         driver.Manage().Timeouts().PageLoad = new TimeSpan(0, 0, 20);
@@ -604,25 +617,38 @@ public class ParserService : IParserService
 
         var content = driver.FindElement(By.Id("wrapperTables")).Text;
 
+        driver.Quit();
         driver.Dispose();
 
-        if (this.LastDayHtmlContent == content) return Task.CompletedTask;
+        if (this.LastDayHtmlContent == content) return;
 
-        return this.ParseDayTimetables().ContinueWith((t) => { Console.WriteLine(t.Exception?.InnerException); },
-            TaskContinuationOptions.OnlyOnFaulted);
+        try
+        {
+            await this.ParseDayTimetables();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
     }
 
-    private Task NewWeekTimetableCheck()
+    private async Task NewWeekTimetableCheck()
     {
         var web = new HtmlWeb();
         var doc = web.Load(WeekUrl);
 
         var content = doc.DocumentNode.SelectNodes("//div/div/div/div/div/div").FirstOrDefault();
-        if (content == default) return Task.CompletedTask;
+        if (content == default) return;
 
-        if (this.LastWeekHtmlContent == content.InnerText) return Task.CompletedTask;
+        if (this.LastWeekHtmlContent == content.InnerText) return;
 
-        return this.ParseWeekTimetables().ContinueWith((t) => { Console.WriteLine(t.Exception?.InnerException); },
-            TaskContinuationOptions.OnlyOnFaulted);
+        try
+        {
+            await this.ParseWeekTimetables();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
     }
 }
