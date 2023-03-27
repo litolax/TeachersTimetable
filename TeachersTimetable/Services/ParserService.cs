@@ -1,5 +1,4 @@
-﻿using HtmlAgilityPack;
-using MongoDB.Driver;
+﻿using MongoDB.Driver;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Interactions;
 using SixLabors.ImageSharp.Formats.Png;
@@ -193,7 +192,7 @@ public class ParserService : IParserService
             this._dayParseStarted = true;
         }
 
-        var driver = Utils.CreateChromeDriver();
+        var (driver, process) = Utils.CreateChromeDriver();
         driver.Navigate().GoToUrl(DayUrl);
 
         var content = driver.FindElement(By.Id("wrapperTables"));
@@ -201,8 +200,10 @@ public class ParserService : IParserService
         if (content is null)
         {
             this._dayParseStarted = false;
+            driver.Close();
             driver.Quit();
             driver.Dispose();
+            process.Kill();
             return;
         }
 
@@ -268,8 +269,10 @@ public class ParserService : IParserService
             }
         }
 
+        driver.Close();
         driver.Quit();
         driver.Dispose();
+        process.Kill();
 
         foreach (var teacherInfo in teacherInfos)
         {
@@ -312,21 +315,20 @@ public class ParserService : IParserService
     private async Task ValidateTimetableHashes(bool firstStart)
     {
         if (this._tempTimetable.Any(e => e.TeacherInfos.Count == 0)) return;
-        var tempTimetable = new List<Timetable>(this._tempTimetable);
-        this._tempTimetable.Clear();
-
-        if (tempTimetable.Count > this._timetable.Count)
+        
+        if (this._tempTimetable.Count > this._timetable.Count)
         {
             this._timetable.Clear();
-            this._timetable = new List<Timetable>(tempTimetable);
+            this._timetable = new List<Timetable>(this._tempTimetable);
             await this.SendNewDayTimetables(null, firstStart, true);
-            tempTimetable.Clear();
+            this._tempTimetable.Clear();
             return;
         }
 
-        for (var i = 0; i < tempTimetable.Count; i++)
+        List<string> changedTeachers = new();
+        for (var i = 0; i < this._tempTimetable.Count; i++)
         {
-            var tempDay = tempTimetable[i];
+            var tempDay = this._tempTimetable[i];
             var day = this._timetable[i];
 
             for (int j = 0; j < tempDay.TeacherInfos.Count; j++)
@@ -338,7 +340,7 @@ public class ParserService : IParserService
 
                 if (teacherInfo == default || tempLessons.Count != teacherInfo.Lessons.Count)
                 {
-                    _ = this.SendNewDayTimetables(tempTeacher, firstStart, false);
+                    changedTeachers.Add(tempTeacher);
                     continue;
                 }
 
@@ -348,15 +350,20 @@ public class ParserService : IParserService
                     var lesson = teacherInfo.Lessons[h];
 
                     if (tempLesson.GetHashCode() == lesson.GetHashCode()) continue;
-                    _ = this.SendNewDayTimetables(tempTeacher, firstStart, false);
+                    changedTeachers.Add(tempTeacher);
                     break;
                 }
             }
         }
 
         this._timetable.Clear();
-        this._timetable = new List<Timetable>(tempTimetable);
-        tempTimetable.Clear();
+        this._timetable = new List<Timetable>(this._tempTimetable);
+        this._tempTimetable.Clear();
+        
+        changedTeachers.ForEach(teacher =>
+        {
+            _ = this.SendNewDayTimetables(teacher.ToString(), firstStart);
+        });
     }
 
     public async Task SendNewDayTimetables(string? teacher, bool firstStart, bool all = false)
@@ -484,7 +491,7 @@ public class ParserService : IParserService
             this._weekParseStarted = true;
         }
 
-        var driver = Utils.CreateChromeDriver();
+        var (driver, process) = Utils.CreateChromeDriver();
         driver.Navigate().GoToUrl(WeekUrl);
 
         var content = driver.FindElement(By.ClassName("entry")).Text;
@@ -533,8 +540,10 @@ public class ParserService : IParserService
                 }
             }
 
+            driver.Close();
             driver.Quit();
             driver.Dispose();
+            process.Kill();
 
             // if (!dbTables.Exists(table => table.Date.Trim() == newDate))
             // {
@@ -601,16 +610,18 @@ public class ParserService : IParserService
 
     private async Task NewDayTimetableCheck()
     {
-        var driver = Utils.CreateChromeDriver();
+        var (driver, process) = Utils.CreateChromeDriver();
 
         driver.Navigate().GoToUrl(DayUrl);
+        var contentElement = driver.FindElement(By.Id("wrapperTables"));
+        bool emptyContent = driver.FindElements(By.XPath(".//div")).ToList().Count < 5;
 
-        var content = driver.FindElement(By.Id("wrapperTables")).Text;
-
+        driver.Close();
         driver.Quit();
         driver.Dispose();
+        process.Kill();
 
-        if (this.LastDayHtmlContent == content) return;
+        if (emptyContent || this.LastDayHtmlContent == contentElement.Text) return;
 
         try
         {
@@ -624,12 +635,15 @@ public class ParserService : IParserService
 
     private async Task NewWeekTimetableCheck()
     {
-        var driver = Utils.CreateChromeDriver();
+        var (driver, process) = Utils.CreateChromeDriver();
         driver.Navigate().GoToUrl(WeekUrl);
 
         var content = driver.FindElement(By.ClassName("entry")).Text;
+        
+        driver.Close();
         driver.Quit();
         driver.Dispose();
+        process.Kill();
         
         if (content == default || this.LastWeekHtmlContent == content) return;
         
