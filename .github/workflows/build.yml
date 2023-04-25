@@ -1,4 +1,4 @@
-name: dotnet package
+name: Deploy to server
 
 on:
   push:
@@ -11,29 +11,100 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        dotnet-version: ['6.0.x' ]
+        dotnet-version: [ '6.0.x' ]
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       - name: Setup .NET Core SDK ${{ matrix.dotnet-version }}
         uses: actions/setup-dotnet@v2
         with:
           dotnet-version: ${{ matrix.dotnet-version }}
+      - name: Checkout submodules
+        shell: bash
+        run: |
+          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
+          git submodule sync --recursive
+          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive --depth=1
       - name: Install dependencies
         run: dotnet restore
       - name: Build
-        run: dotnet publish -c release -r ubuntu.16.04-x64 --output TeachersTimetable/Artifacts
-      - name: Test
-        run: dotnet test --no-restore --verbosity normal
-      - name: Upload dotnet test results
+        run: dotnet publish TeachersTimetable -c release -r ubuntu.21.04-x64 -p:PublishSingleFile=true --self-contained true --output TeachersTimetable/Artifacts
+      - name: Upload a Build Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: dotnet-results-${{ matrix.dotnet-version }}
-          path: TestResults-${{ matrix.dotnet-version }}
-        if: ${{ always() }}
-      - name: Upload a Build Artifact
-        uses: actions/upload-artifact@v2.2.2
+          name: build
+          path: TeachersTimetable/Artifacts
+  upload:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dotnet-version: [ '6.0.x' ]
+
+    steps:
+      - uses: actions/download-artifact@v2
+        name: Download build artifact
         with:
           name: build
-          path: TeachersTimetable/Artifacts/**
-          if-no-files-found: error
+          path: TeachersTimetable/Artifacts
+      - name: Install SSH Key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: 'just-a-placeholder-so-we-dont-get-errors'
+      - name: Adding Known Hosts
+        run: ssh-keyscan -p 41061 -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+      - name: Copy artifacts
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: root
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: 41061
+          source: "TeachersTimetable/Artifacts"
+          target: "/home/Teachers-Timetable/"
+      - name: Set up files in host
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: 41061
+          username: root
+          password: ${{ secrets.SSH_PASSWORD }}
+          script: "cd /home/Teachers-Timetable/TeachersTimetable/Artifacts && chmod +x TeachersTimetable && shutdown -r"
+  
+  publish:
+    needs: upload
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dotnet-version: [ '6.0.x' ]
+    steps:
+      - uses: actions/download-artifact@v2
+        name: Download build artifact
+        with:
+          name: build
+          path: TeachersTimetable/Artifacts
+      - uses: actions/create-release@v1
+        id: create_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCOUNT_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+      - name: Archive files
+        run: |
+          cd TeachersTimetable/Artifacts
+          zip -r build.zip *
+      - name: Publish artifacts to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCOUNT_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: TeachersTimetable/Artifacts/build.zip
+          asset_name: build.zip
+          asset_content_type: application/zip
+      - name: Cleanup
+        run: rm -rf ~/.ssh
