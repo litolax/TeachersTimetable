@@ -72,7 +72,7 @@ jobs:
           port: 41061
           username: root
           password: ${{ secrets.SSH_PASSWORD }}
-          script: "cd /home/Teachers-Timetable/TeachersTimetable/Artifacts && chmod +x TeachersTimetable && shutdown -r"
+          script: "cd /home/Teachers-Timetable/TeachersTimetable/Artifacts && chmod +x TeachersTimetable && systemctl restart timetableservice"
   
   publish:
     needs: upload
