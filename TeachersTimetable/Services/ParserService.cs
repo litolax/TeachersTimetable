@@ -302,7 +302,11 @@ public class ParserService : IParserService
             teacherInfo.Lessons = teacherInfo.Lessons.OrderBy(l => l.Index).ToList();
         }
 
-        this._tempTimetable.Add(new()
+        // this._tempTimetable.Add(new()
+        // {
+        //     TeacherInfos = new List<TeacherInfo>(teacherInfos)
+        // });
+        this._timetable.Add(new()
         {
             TeacherInfos = new List<TeacherInfo>(teacherInfos)
         });
