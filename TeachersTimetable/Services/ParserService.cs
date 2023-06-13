@@ -307,7 +307,7 @@ public class ParserService : IParserService
             TeacherInfos = new List<TeacherInfo>(teacherInfos)
         });
         teacherInfos.Clear();
-        await this.ValidateTimetableHashes(firstStart);
+        //await this.ValidateTimetableHashes(firstStart);
         this._dayParseStarted = false;
         Console.WriteLine("Завершено дневное расписание");
     }
