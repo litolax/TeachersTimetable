@@ -138,11 +138,11 @@ public class ParserService : IParserService
     private static List<Timetable> Timetable { get; set; } = new();
     private static Dictionary<string, Image> Images { get; set; } = new();
 
-    private string LastDayHtmlContent { get; set; }
-    private string LastWeekHtmlContent { get; set; }
+    private static string LastDayHtmlContent { get; set; }
+    private static string LastWeekHtmlContent { get; set; }
 
-    private bool _weekParseStarted;
-    private bool _dayParseStarted;
+    private static bool _weekParseStarted;
+    private static bool _dayParseStarted;
 
     public ParserService(IMongoService mongoService, IBotService botService, IConfig<MainConfig> config)
     {
@@ -188,8 +188,8 @@ public class ParserService : IParserService
         Console.WriteLine("Начато дневное расписание");
         lock (this)
         {
-            if (this._dayParseStarted) return;
-            this._dayParseStarted = true;
+            if (_dayParseStarted) return;
+            _dayParseStarted = true;
         }
 
         var (driver, process) = Utils.CreateChromeDriver();
@@ -199,7 +199,7 @@ public class ParserService : IParserService
 
         if (content is null)
         {
-            this._dayParseStarted = false;
+            _dayParseStarted = false;
             driver.Close();
             driver.Quit();
             driver.Dispose();
@@ -207,7 +207,7 @@ public class ParserService : IParserService
             return;
         }
 
-        this.LastDayHtmlContent = content.Text;
+        LastDayHtmlContent = content.Text;
         List<TeacherInfo> teacherInfos = new List<TeacherInfo>();
         TempTimetable.Clear();
 
@@ -312,7 +312,7 @@ public class ParserService : IParserService
         });
         teacherInfos.Clear();
         //await this.ValidateTimetableHashes(firstStart);
-        this._dayParseStarted = false;
+        _dayParseStarted = false;
         Console.WriteLine("Завершено дневное расписание");
     }
 
@@ -491,15 +491,15 @@ public class ParserService : IParserService
         Console.WriteLine("Начато недельное расписание");
         lock (this)
         {
-            if (this._weekParseStarted) return;
-            this._weekParseStarted = true;
+            if (_weekParseStarted) return;
+            _weekParseStarted = true;
         }
 
         var (driver, process) = Utils.CreateChromeDriver();
         driver.Navigate().GoToUrl(WeekUrl);
 
         var content = driver.FindElement(By.ClassName("entry")).Text;
-        if (content != default) this.LastWeekHtmlContent = content;
+        if (content != default) LastWeekHtmlContent = content;
         
         try
         {
@@ -555,13 +555,13 @@ public class ParserService : IParserService
             // }
 
             //await this.SendNotificationsAboutWeekTimetable();
-            this._weekParseStarted = false;
+            _weekParseStarted = false;
             Console.WriteLine("Завершено недельное расписание");
         }
         catch (Exception e)
         {
             Console.WriteLine(e);
-            this._weekParseStarted = false;
+            _weekParseStarted = false;
         }
     }
 
@@ -616,7 +616,7 @@ public class ParserService : IParserService
     {
         lock (this)
         {
-            if (this._dayParseStarted) return;
+            if (_dayParseStarted) return;
         }
         
         var (driver, process) = Utils.CreateChromeDriver();
@@ -630,7 +630,7 @@ public class ParserService : IParserService
         driver.Dispose();
         process.Kill();
 
-        if (emptyContent || this.LastDayHtmlContent == contentElement.Text) return;
+        if (emptyContent || LastDayHtmlContent == contentElement.Text) return;
 
         try
         {
@@ -646,7 +646,7 @@ public class ParserService : IParserService
     {
         lock (this)
         {
-            if (this._weekParseStarted) return;
+            if (_weekParseStarted) return;
         }
         
         var (driver, process) = Utils.CreateChromeDriver();
@@ -659,7 +659,7 @@ public class ParserService : IParserService
         driver.Dispose();
         process.Kill();
         
-        if (content == default || this.LastWeekHtmlContent == content) return;
+        if (content == default || LastWeekHtmlContent == content) return;
         
         try
         {
