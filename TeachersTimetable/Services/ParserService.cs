@@ -134,9 +134,9 @@ public class ParserService : IParserService
         "Эльканович А. Ф.",
     };
 
-    private List<Timetable> _tempTimetable { get; set; } = new();
-    private List<Timetable> _timetable { get; set; } = new();
-    private Dictionary<string, Image> _images { get; set; } = new();
+    private static List<Timetable> TempTimetable { get; set; } = new();
+    private static List<Timetable> Timetable { get; set; } = new();
+    private static Dictionary<string, Image> Images { get; set; } = new();
 
     private string LastDayHtmlContent { get; set; }
     private string LastWeekHtmlContent { get; set; }
@@ -209,7 +209,7 @@ public class ParserService : IParserService
 
         this.LastDayHtmlContent = content.Text;
         List<TeacherInfo> teacherInfos = new List<TeacherInfo>();
-        this._tempTimetable.Clear();
+        TempTimetable.Clear();
 
         var teachersAndLessons = content.FindElements(By.XPath(".//div")).ToList();
 
@@ -306,7 +306,7 @@ public class ParserService : IParserService
         // {
         //     TeacherInfos = new List<TeacherInfo>(teacherInfos)
         // });
-        this._timetable.Add(new()
+        Timetable.Add(new()
         {
             TeacherInfos = new List<TeacherInfo>(teacherInfos)
         });
@@ -316,59 +316,59 @@ public class ParserService : IParserService
         Console.WriteLine("Завершено дневное расписание");
     }
 
-    private async Task ValidateTimetableHashes(bool firstStart)
-    {
-        if (this._tempTimetable.Any(e => e.TeacherInfos.Count == 0)) return;
-        
-        if (this._tempTimetable.Count > this._timetable.Count)
-        {
-            this._timetable.Clear();
-            this._timetable = new List<Timetable>(this._tempTimetable);
-            await this.SendNewDayTimetables(null, firstStart, true);
-            this._tempTimetable.Clear();
-            return;
-        }
-
-        List<string> changedTeachers = new();
-        for (var i = 0; i < this._tempTimetable.Count; i++)
-        {
-            var tempDay = this._tempTimetable[i];
-            var day = this._timetable[i];
-
-            for (int j = 0; j < tempDay.TeacherInfos.Count; j++)
-            {
-                var tempTeacher = tempDay.TeacherInfos[j].Name;
-
-                var tempLessons = tempDay.TeacherInfos[j].Lessons;
-                var teacherInfo = day.TeacherInfos.FirstOrDefault(g => g.Name == tempDay.TeacherInfos[j].Name);
-
-                if (teacherInfo == default || tempLessons.Count != teacherInfo.Lessons.Count)
-                {
-                    changedTeachers.Add(tempTeacher);
-                    continue;
-                }
-
-                for (var h = 0; h < tempLessons.Count; h++)
-                {
-                    var tempLesson = tempLessons[h];
-                    var lesson = teacherInfo.Lessons[h];
-
-                    if (tempLesson.GetHashCode() == lesson.GetHashCode()) continue;
-                    changedTeachers.Add(tempTeacher);
-                    break;
-                }
-            }
-        }
-
-        this._timetable.Clear();
-        this._timetable = new List<Timetable>(this._tempTimetable);
-        this._tempTimetable.Clear();
-        
-        changedTeachers.ForEach(teacher =>
-        {
-            _ = this.SendNewDayTimetables(teacher.ToString(), firstStart);
-        });
-    }
+    // private async Task ValidateTimetableHashes(bool firstStart)
+    // {
+    //     if (this._tempTimetable.Any(e => e.TeacherInfos.Count == 0)) return;
+    //     
+    //     if (this._tempTimetable.Count > this._timetable.Count)
+    //     {
+    //         this._timetable.Clear();
+    //         this._timetable = new List<Timetable>(this._tempTimetable);
+    //         await this.SendNewDayTimetables(null, firstStart, true);
+    //         this._tempTimetable.Clear();
+    //         return;
+    //     }
+    //
+    //     List<string> changedTeachers = new();
+    //     for (var i = 0; i < this._tempTimetable.Count; i++)
+    //     {
+    //         var tempDay = this._tempTimetable[i];
+    //         var day = this._timetable[i];
+    //
+    //         for (int j = 0; j < tempDay.TeacherInfos.Count; j++)
+    //         {
+    //             var tempTeacher = tempDay.TeacherInfos[j].Name;
+    //
+    //             var tempLessons = tempDay.TeacherInfos[j].Lessons;
+    //             var teacherInfo = day.TeacherInfos.FirstOrDefault(g => g.Name == tempDay.TeacherInfos[j].Name);
+    //
+    //             if (teacherInfo == default || tempLessons.Count != teacherInfo.Lessons.Count)
+    //             {
+    //                 changedTeachers.Add(tempTeacher);
+    //                 continue;
+    //             }
+    //
+    //             for (var h = 0; h < tempLessons.Count; h++)
+    //             {
+    //                 var tempLesson = tempLessons[h];
+    //                 var lesson = teacherInfo.Lessons[h];
+    //
+    //                 if (tempLesson.GetHashCode() == lesson.GetHashCode()) continue;
+    //                 changedTeachers.Add(tempTeacher);
+    //                 break;
+    //             }
+    //         }
+    //     }
+    //
+    //     this._timetable.Clear();
+    //     this._timetable = new List<Timetable>(this._tempTimetable);
+    //     this._tempTimetable.Clear();
+    //     
+    //     changedTeachers.ForEach(teacher =>
+    //     {
+    //         _ = this.SendNewDayTimetables(teacher.ToString(), firstStart);
+    //     });
+    // }
 
     public async Task SendNewDayTimetables(string? teacher, bool firstStart, bool all = false)
     {
@@ -389,7 +389,7 @@ public class ParserService : IParserService
 
         foreach (var user in users.Where(user => user.Notifications && user.Teacher is not null))
         {
-            if (this._timetable.Count < 1)
+            if (Timetable.Count < 1)
             {
                 this._botService.SendMessage(new SendMessageArgs(user.UserId, $"У {user.Teacher} нет пар"));
                 continue;
@@ -397,7 +397,7 @@ public class ParserService : IParserService
 
             var tasks = new List<Task>();
 
-            foreach (var day in this._timetable)
+            foreach (var day in Timetable)
             {
                 var message = day.Date + "\n";
 
@@ -437,13 +437,13 @@ public class ParserService : IParserService
             return;
         }
 
-        if (this._timetable.Count < 1)
+        if (Timetable.Count < 1)
         {
             await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, $"У {user.Teacher} нет пар"));
             return;
         }
 
-        foreach (var day in this._timetable)
+        foreach (var day in Timetable)
         {
             string message = day.Date + "\n";
 
@@ -518,16 +518,16 @@ public class ParserService : IParserService
                     actions.MoveToElement(element).Perform();
 
                     var screenshot = (driver as ITakesScreenshot).GetScreenshot();
-                    if (this._images.TryGetValue(teacher, out var oldImage))
+                    if (Images.TryGetValue(teacher, out var oldImage))
                     {
                         oldImage.Dispose();
-                        this._images.Remove(teacher);
+                        Images.Remove(teacher);
                     }
 
                     var image = Image.Load(screenshot.AsByteArray);
                     image.Mutate(x => x.Resize((int)(image.Width / 1.5), (int)(image.Height / 1.5)));
 
-                    this._images.Add(teacher, image);
+                    Images.Add(teacher, image);
                 }
                 catch (Exception e)
                 {
@@ -578,7 +578,7 @@ public class ParserService : IParserService
             return;
         }
 
-        this._images.TryGetValue(user.Teacher, out var image);
+        Images.TryGetValue(user.Teacher, out var image);
         
         if (image is null)
         {
