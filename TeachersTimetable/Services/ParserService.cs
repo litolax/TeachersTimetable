@@ -277,6 +277,7 @@ public class ParserService : IParserService
         // {
         //     TeacherInfos = new List<TeacherInfo>(teacherInfos)
         // });
+        Timetable.Clear();
         Timetable.Add(new()
         {
             TeacherInfos = new List<TeacherInfo>(teacherInfos)
