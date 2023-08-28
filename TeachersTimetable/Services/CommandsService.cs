@@ -91,7 +91,7 @@ namespace TeachersTimetable.Services
                 }
                 case "Посмотреть расписание на неделю":
                 {
-                    await this._parserService.SendWeekTimetable(sender);
+                    await this._parserService.SendWeek(sender);
                     break;
                 }
                 case "Сменить преподавателя":
@@ -119,8 +119,8 @@ namespace TeachersTimetable.Services
                 {
                     var lowerMessageText = messageText.ToLower();
                     
-                    if (lowerMessageText.Contains("/notify"))
-                        await this._parserService.SendNewDayTimetables(null, true);
+                    // if (lowerMessageText.Contains("/notify"))
+                    //     await this._parserService.SendNewDayTimetables(null, true);
                 }
                 
                 await this._interfaceService.NotifyAllUsers(message);

@@ -16,11 +16,11 @@ namespace TeachersTimetable.Services;
 public interface IParserService
 {
     List<string> Teachers { get; }
-    Task SendNewDayTimetables(string? teacher, bool firstStart, bool all = false);
     Task SendDayTimetable(User telegramUser);
-    Task ParseDayTimetables(bool firstStart = false);
-    Task ParseWeekTimetables();
-    Task SendWeekTimetable(User telegramUser);
+    Task ParseDay();
+    Task ParseWeek();
+    Task SendWeek(User telegramUser);
+    Task UpdateTimetableTick();
 }
 
 public class ParserService : IParserService
@@ -135,13 +135,8 @@ public class ParserService : IParserService
 
     private static List<Timetable> TempTimetable { get; set; } = new();
     private static List<Timetable> Timetable { get; set; } = new();
-    private static Dictionary<string, Image> Images { get; set; } = new();
-
     private static string LastDayHtmlContent { get; set; }
     private static string LastWeekHtmlContent { get; set; }
-
-    private static bool _weekParseStarted;
-    private static bool _dayParseStarted;
 
     public ParserService(IMongoService mongoService, IBotService botService, IConfig<MainConfig> config)
     {
@@ -158,7 +153,7 @@ public class ParserService : IParserService
         {
             try
             {
-                await this.NewTimetableCheck();
+                await this.UpdateTimetableTick();
             }
             catch (Exception e)
             {
@@ -167,23 +162,20 @@ public class ParserService : IParserService
         };
     }
 
-    public async Task ParseDayTimetables(bool firstStart = false)
+    public Task ParseDay()
     {
-        Console.WriteLine("Начато дневное расписание");
+        Console.WriteLine("Start day parse");
 
+        var teacherInfos = new List<TeacherInfo>();
         var driver = ChromeService.Driver;
-        
+
         driver.Navigate().GoToUrl(DayUrl);
 
         var content = driver.FindElement(By.Id("wrapperTables"));
 
-        if (content is null)
-        {
-            return;
-        }
+        if (content is null) return Task.CompletedTask;
 
         LastDayHtmlContent = content.Text;
-        List<TeacherInfo> teacherInfos = new List<TeacherInfo>();
         TempTimetable.Clear();
 
         var teachersAndLessons = content.FindElements(By.XPath(".//div")).ToList();
@@ -195,8 +187,8 @@ public class ParserService : IParserService
                 for (var i = 1; i < teachersAndLessons.Count; i += 2)
                 {
                     if (teachersAndLessons[i - 1].Text.Split('-')[0].Trim() != teacher) continue;
-                    TeacherInfo teacherInfo = new TeacherInfo();
-                    List<Lesson> lessons = new List<Lesson>();
+                    var teacherInfo = new TeacherInfo();
+                    var lessons = new List<Lesson>();
 
                     var lessonsElements = teachersAndLessons[i].FindElements(By.XPath(".//table/tbody/tr")).ToList();
 
@@ -212,9 +204,9 @@ public class ParserService : IParserService
                     var lessonNames = lessonsElements[1].FindElements(By.XPath(".//td")).ToList();
                     var lessonCabinets = lessonsElements[2].FindElements(By.XPath(".//td")).ToList();
 
-                    for (int j = 0; j < lessonNumbers.Count; j++)
+                    for (var j = 0; j < lessonNumbers.Count; j++)
                     {
-                        string cabinet = lessonCabinets.Count < lessonNumbers.Count && lessonCabinets.Count <= j
+                        var cabinet = lessonCabinets.Count < lessonNumbers.Count && lessonCabinets.Count <= j
                             ? "-"
                             : lessonCabinets[j].Text;
 
@@ -246,7 +238,7 @@ public class ParserService : IParserService
 
         foreach (var teacherInfo in teacherInfos)
         {
-            int count = 0;
+            var count = 0;
             teacherInfo.Lessons.Reverse();
             foreach (var lesson in teacherInfo.Lessons)
             {
@@ -259,7 +251,7 @@ public class ParserService : IParserService
 
             if (teacherInfo.Lessons.Count < 1) continue;
 
-            for (int i = 0; i < teacherInfo.Lessons.First().Index - 1; i++)
+            for (var i = 0; i < teacherInfo.Lessons.First().Index - 1; i++)
             {
                 teacherInfo.Lessons.Add(new Lesson()
                 {
@@ -272,126 +264,14 @@ public class ParserService : IParserService
             teacherInfo.Lessons = teacherInfo.Lessons.OrderBy(l => l.Index).ToList();
         }
 
-        // this._tempTimetable.Add(new()
-        // {
-        //     TeacherInfos = new List<TeacherInfo>(teacherInfos)
-        // });
         Timetable.Clear();
         Timetable.Add(new()
         {
             TeacherInfos = new List<TeacherInfo>(teacherInfos)
         });
         teacherInfos.Clear();
-        //await this.ValidateTimetableHashes(firstStart);
-        Console.WriteLine("Завершено дневное расписание");
-    }
-
-    // private async Task ValidateTimetableHashes(bool firstStart)
-    // {
-    //     if (this._tempTimetable.Any(e => e.TeacherInfos.Count == 0)) return;
-    //     
-    //     if (this._tempTimetable.Count > this._timetable.Count)
-    //     {
-    //         this._timetable.Clear();
-    //         this._timetable = new List<Timetable>(this._tempTimetable);
-    //         await this.SendNewDayTimetables(null, firstStart, true);
-    //         this._tempTimetable.Clear();
-    //         return;
-    //     }
-    //
-    //     List<string> changedTeachers = new();
-    //     for (var i = 0; i < this._tempTimetable.Count; i++)
-    //     {
-    //         var tempDay = this._tempTimetable[i];
-    //         var day = this._timetable[i];
-    //
-    //         for (int j = 0; j < tempDay.TeacherInfos.Count; j++)
-    //         {
-    //             var tempTeacher = tempDay.TeacherInfos[j].Name;
-    //
-    //             var tempLessons = tempDay.TeacherInfos[j].Lessons;
-    //             var teacherInfo = day.TeacherInfos.FirstOrDefault(g => g.Name == tempDay.TeacherInfos[j].Name);
-    //
-    //             if (teacherInfo == default || tempLessons.Count != teacherInfo.Lessons.Count)
-    //             {
-    //                 changedTeachers.Add(tempTeacher);
-    //                 continue;
-    //             }
-    //
-    //             for (var h = 0; h < tempLessons.Count; h++)
-    //             {
-    //                 var tempLesson = tempLessons[h];
-    //                 var lesson = teacherInfo.Lessons[h];
-    //
-    //                 if (tempLesson.GetHashCode() == lesson.GetHashCode()) continue;
-    //                 changedTeachers.Add(tempTeacher);
-    //                 break;
-    //             }
-    //         }
-    //     }
-    //
-    //     this._timetable.Clear();
-    //     this._timetable = new List<Timetable>(this._tempTimetable);
-    //     this._tempTimetable.Clear();
-    //     
-    //     changedTeachers.ForEach(teacher =>
-    //     {
-    //         _ = this.SendNewDayTimetables(teacher.ToString(), firstStart);
-    //     });
-    // }
-
-    public async Task SendNewDayTimetables(string? teacher, bool firstStart, bool all = false)
-    {
-        if (firstStart) return;
-
-        if (this._config.Entries.Administrators is { } administrators)
-        {
-            var adminTelegramId = administrators.FirstOrDefault();
-            if (adminTelegramId != default)
-            {
-                this._botService.SendMessage(new SendMessageArgs(adminTelegramId,
-                    "Изменилось дневное расписание учителей для: " + (all ? "Всех" : teacher)));
-            }
-        }
-
-        var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
-        var users = (await userCollection.FindAsync(u => all || u.Teacher == teacher)).ToList();
-
-        foreach (var user in users.Where(user => user.Notifications && user.Teacher is not null))
-        {
-            if (Timetable.Count < 1)
-            {
-                this._botService.SendMessage(new SendMessageArgs(user.UserId, $"У {user.Teacher} нет пар"));
-                continue;
-            }
-
-            var tasks = new List<Task>();
-
-            foreach (var day in Timetable)
-            {
-                var message = day.Date + "\n";
-
-                foreach (var teacherInfo in day.TeacherInfos.Where(teacherInfo =>
-                             user.Teacher != null && user.Teacher == teacherInfo.Name))
-                {
-                    if (teacherInfo.Lessons.Count < 1)
-                    {
-                        message = $"У {teacherInfo.Name} нет пар";
-                        continue;
-                    }
-
-                    message = this.CreateDayTimetableMessage(teacherInfo);
-                }
-
-                tasks.Add(this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
-                    message.Trim().Length <= 1 ? "У выбранного преподавателя нет пар" : message)
-                {
-                    ParseMode = ParseMode.Markdown
-                }));
-            }
-
-            await Task.WhenAll(tasks);
-        }
+        Console.WriteLine("End parse day");
+        return Task.CompletedTask;
     }
 
     public async Task SendDayTimetable(User telegramUser)
@@ -415,7 +295,7 @@ public class ParserService : IParserService
 
         foreach (var day in Timetable)
         {
-            string message = day.Date + "\n";
+            var message = day.Date + "\n";
 
             foreach (var teacherInfo in day.TeacherInfos.Where(teacherInfo => user.Teacher == teacherInfo.Name))
             {
@@ -425,7 +305,7 @@ public class ParserService : IParserService
                     continue;
                 }
 
-                message = this.CreateDayTimetableMessage(teacherInfo);
+                message = Utils.CreateDayTimetableMessage(teacherInfo);
             }
 
             await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
@@ -436,29 +316,9 @@ public class ParserService : IParserService
         }
     }
 
-    private string CreateDayTimetableMessage(TeacherInfo teacherInfo)
+    public async Task ParseWeek()
     {
-        string message = string.Empty;
-
-        message += $"Преподаватель: *{teacherInfo.Name}*\n\n";
-
-        foreach (var lesson in teacherInfo.Lessons)
-        {
-            var lessonName = Utils.HtmlTagsFix(lesson.Group).Replace('\n', ' ');
-            var cabinet = Utils.HtmlTagsFix(lesson.Cabinet).Replace('\n', ' ');
-
-            message +=
-                $"*Пара: №{lesson.Index}*\n" +
-                $"{(lessonName.Length < 2 ? "Предмет: -" : $"{lessonName}")}\n" +
-                $"{(cabinet.Length < 2 ? "Каб: -" : $"Каб: {cabinet}")}\n\n";
-        }
-
-        return message;
-    }
-
-    public async Task ParseWeekTimetables()
-    {
-        Console.WriteLine("Начато недельное расписание");
+        Console.WriteLine("Start week parse");
 
         var driver = ChromeService.Driver;
         driver.Navigate().GoToUrl(WeekUrl);
@@ -483,16 +343,11 @@ public class ParserService : IParserService
                     actions.MoveToElement(element).Perform();
 
                     var screenshot = (driver as ITakesScreenshot).GetScreenshot();
-                    if (Images.TryGetValue(teacher, out var oldImage))
-                    {
-                        oldImage.Dispose();
-                        Images.Remove(teacher);
-                    }
-
                     var image = Image.Load(screenshot.AsByteArray);
+
                     image.Mutate(x => x.Resize((int)(image.Width / 1.5), (int)(image.Height / 1.5)));
 
-                    Images.Add(teacher, image);
+                    await image.SaveAsync($"./cachedImages/{teacher}.png");
                 }
                 catch (Exception e)
                 {
@@ -508,22 +363,16 @@ public class ParserService : IParserService
                     }
                 }
             }
-            
-            // if (!dbTables.Exists(table => table.Date.Trim() == newDate))
-            // {
-            //     await dateDbCollection.InsertOneAsync(new Timetable() { Date = newDate });
-            // }
-
-            //await this.SendNotificationsAboutWeekTimetable();
-            Console.WriteLine("Завершено недельное расписание");
         }
         catch (Exception e)
         {
             Console.WriteLine(e);
         }
+
+        Console.WriteLine("End week parse");
     }
 
-    public async Task SendWeekTimetable(User telegramUser)
+    public async Task SendWeek(User telegramUser)
     {
         var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
         var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First();
@@ -536,11 +385,11 @@ public class ParserService : IParserService
             return;
         }
 
-        Images.TryGetValue(user.Teacher, out var image);
+        var image = await Image.LoadAsync($"./cachedImages/{user.Teacher}.png");
 
-        if (image is null)
+        if (image is not { })
         {
-            this._botService.SendMessage(new SendMessageArgs(user.UserId, "Увы, данный преподаватель не найден"));
+            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, "Увы, данный преподаватель не найден"));
             return;
         }
 
@@ -548,29 +397,14 @@ public class ParserService : IParserService
         {
             await image.SaveAsync(ms, new PngEncoder());
 
-            this._botService.SendPhoto(new SendPhotoArgs(user.UserId,
+            await this._botService.SendPhotoAsync(new SendPhotoArgs(user.UserId,
                 new InputFile(ms.ToArray(), $"Teacher - {user.Teacher}")));
 
             await ms.DisposeAsync();
+            image.Dispose();
         }
     }
-
-    public async Task SendNotificationsAboutWeekTimetable()
-    {
-        var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
-        var users = (await userCollection.FindAsync(u => true)).ToList();
-        if (users is null) return;
-
-        var tasks = (from user in users
-            where user.Teacher is not null && user.Notifications
-            select
-                this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
-                    "Обновлена страница расписания на неделю"))).Cast<Task>().ToList();
-
-        await Task.WhenAll(tasks);
-    }
-
-    private async Task NewTimetableCheck()
+    public async Task UpdateTimetableTick()
     {
         bool parseDay = false, parseWeek = false;
         var driver = ChromeService.Driver;
@@ -578,9 +412,8 @@ public class ParserService : IParserService
         //Day
         driver.Navigate().GoToUrl(DayUrl);
         var contentElement = driver.FindElement(By.Id("wrapperTables"));
-        bool emptyContent = driver.FindElements(By.XPath(".//div")).ToList().Count < 5;
-
-
+        var emptyContent = driver.FindElements(By.XPath(".//div")).ToList().Count < 5;
+        
         if (!emptyContent && LastDayHtmlContent != contentElement.Text)
         {
             parseDay = true;
@@ -597,8 +430,8 @@ public class ParserService : IParserService
 
         try
         {
-            if (parseDay) await this.ParseDayTimetables();
-            if (parseWeek) await this.ParseWeekTimetables();
+            if (parseWeek) await this.ParseWeek();
+            if (parseDay) await this.ParseDay();
         }
         catch (Exception e)
         {

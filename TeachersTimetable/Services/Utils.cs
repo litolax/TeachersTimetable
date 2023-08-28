@@ -1,7 +1,7 @@
-﻿using System.Diagnostics;
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium.Firefox;
+using TeachersTimetable.Models;
 using Size = System.Drawing.Size;
 
 namespace TeachersTimetable.Services;
@@ -13,7 +13,7 @@ public static class Utils
         return Regex.Replace(input, "<[^>]+>|&nbsp;", "").Trim();
     }
 
-    public static void ModifyUnnecessaryElementsOnWebsite(ref ChromeDriver driver)
+    public static void ModifyUnnecessaryElementsOnWebsite(ref FirefoxDriver driver)
     {
         var container = driver.FindElement(By.ClassName("main"));
         driver.ExecuteScript("arguments[0].style='width: 100%; border-top: none'", container);
@@ -35,36 +35,24 @@ public static class Utils
         var all = driver.FindElement(By.CssSelector("*"));
         driver.ExecuteScript("arguments[0].style='overflow-y: hidden; overflow-x: hidden;'", all);
     }
-
-    public static (ChromeDriver chromeDriver, Process process) CreateChromeDriver()
+    
+    public static string CreateDayTimetableMessage(TeacherInfo teacherInfo)
     {
-        var service = ChromeDriverService.CreateDefaultService();
-        
-        service.EnableVerboseLogging = false;
-        service.SuppressInitialDiagnosticInformation = true;
-        service.HideCommandPromptWindow = true;
-        
-        var options = new ChromeOptions
+        var message = string.Empty;
+
+        message += $"Преподаватель: *{teacherInfo.Name}*\n\n";
+
+        foreach (var lesson in teacherInfo.Lessons)
         {
-            PageLoadStrategy = PageLoadStrategy.Eager
-        };
+            var lessonName = Utils.HtmlTagsFix(lesson.Group).Replace('\n', ' ');
+            var cabinet = Utils.HtmlTagsFix(lesson.Cabinet).Replace('\n', ' ');
 
-        options.AddArgument("--no-sandbox");
-        options.AddArgument("--headless");
-        options.AddArgument("--disable-gpu");
-        options.AddArgument("--disable-crash-reporter");
-        options.AddArgument("--disable-extensions");
-        options.AddArgument("--disable-in-process-stack-traces");
-        options.AddArgument("--disable-logging");
-        options.AddArgument("--disable-dev-shm-usage");
-        options.AddArgument("--log-level=3");
-        options.AddArgument("--output=/dev/null");
-        options.AddArgument("--force-device-scale-factor=1");
-        options.AddArgument("--disable-browser-side-navigation");
-        
-        var driver = new ChromeDriver(service, options);
-        driver.Manage().Timeouts().PageLoad = new TimeSpan(0, 2, 30);
+            message +=
+                $"*Пара: №{lesson.Index}*\n" +
+                $"{(lessonName.Length < 2 ? "Предмет: -" : $"{lessonName}")}\n" +
+                $"{(cabinet.Length < 2 ? "Каб: -" : $"Каб: {cabinet}")}\n\n";
+        }
 
-        return (driver, Process.GetProcessById(service.ProcessId));
+        return message;
     }
 }
