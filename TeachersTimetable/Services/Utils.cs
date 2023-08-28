@@ -18,7 +18,7 @@ public static class Utils
         var container = driver.FindElement(By.ClassName("main"));
         driver.ExecuteScript("arguments[0].style='width: 100%; border-top: none'", container);
 
-        driver.Manage().Window.Size = new Size(1920, container.Size.Height - 175);
+        driver.Manage().Window.Size = new Size(1920, container.Size.Height!);
 
         var header = driver.FindElement(By.Id("header"));
         driver.ExecuteScript("arguments[0].style='display: none'", header);
@@ -44,8 +44,8 @@ public static class Utils
 
         foreach (var lesson in teacherInfo.Lessons)
         {
-            var lessonName = Utils.HtmlTagsFix(lesson.Group).Replace('\n', ' ');
-            var cabinet = Utils.HtmlTagsFix(lesson.Cabinet).Replace('\n', ' ');
+            var lessonName = HtmlTagsFix(lesson.Group).Replace('\n', ' ');
+            var cabinet = HtmlTagsFix(lesson.Cabinet).Replace('\n', ' ');
 
             message +=
                 $"*Пара: №{lesson.Index}*\n" +
