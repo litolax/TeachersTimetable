@@ -134,8 +134,6 @@ public class ParserService : IParserService
         "Щербич Е. В.",
         "Щуко О. И.",
     };
-
-    private static List<Timetable> TempTimetable { get; set; } = new();
     private static List<Timetable> Timetable { get; set; } = new();
     private static string LastDayHtmlContent { get; set; }
     private static string LastWeekHtmlContent { get; set; }
@@ -178,14 +176,13 @@ public class ParserService : IParserService
 
 
             driver.Navigate().GoToUrl(DayUrl);
-            Thread.Sleep(1500);
+            //Thread.Sleep(1500);
 
             var content = driver.FindElement(By.Id("wrapperTables"));
 
             if (content is null) return Task.CompletedTask;
 
             LastDayHtmlContent = content.Text;
-            TempTimetable.Clear();
 
             var teachersAndLessons = content.FindElements(By.XPath(".//div")).ToList();
 
@@ -336,7 +333,7 @@ public class ParserService : IParserService
         {
             driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
             driver.Navigate().GoToUrl(WeekUrl);
-            Thread.Sleep(1500);
+            //Thread.Sleep(1500);
 
             var content = driver.FindElement(By.ClassName("entry")).Text;
             if (content != default) LastWeekHtmlContent = content;
@@ -347,7 +344,7 @@ public class ParserService : IParserService
                 try
                 {
                     driver.Navigate().GoToUrl($"{WeekUrl}?teacher={teacher.Replace(" ", "+")}");
-                    Thread.Sleep(1500);
+                    //Thread.Sleep(1500);
 
                     Utils.ModifyUnnecessaryElementsOnWebsite(driver);
 
@@ -416,6 +413,7 @@ public class ParserService : IParserService
     {
         try
         {
+            Console.WriteLine("Start update tick");
             bool parseDay = false, parseWeek = false;
             var (service, options, delay) = this._chromeService.Create();
             using (FirefoxDriver driver = new FirefoxDriver(service, options, delay))
@@ -423,7 +421,7 @@ public class ParserService : IParserService
                 //Day
                 driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
                 driver.Navigate().GoToUrl(DayUrl);
-                Thread.Sleep(1500);
+                //Thread.Sleep(1500);
 
                 var contentElement = driver.FindElement(By.Id("wrapperTables")).Text;
                 var emptyContent = driver.FindElements(By.XPath(".//div")).ToList().Count < 5;
@@ -434,7 +432,7 @@ public class ParserService : IParserService
                 }
 
                 driver.Navigate().GoToUrl(WeekUrl);
-                Thread.Sleep(1500);
+                //Thread.Sleep(1500);
 
                 var content = driver.FindElement(By.ClassName("entry")).Text;
 
@@ -447,6 +445,7 @@ public class ParserService : IParserService
 
             if (parseWeek) await this.ParseWeek();
             if (parseDay) await this.ParseDay();
+            Console.WriteLine("End update tick");
         }
         catch (Exception e)
         {
