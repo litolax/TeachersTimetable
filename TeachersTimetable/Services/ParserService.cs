@@ -1,5 +1,6 @@
 ﻿using MongoDB.Driver;
 using OpenQA.Selenium;
+using OpenQA.Selenium.Firefox;
 using OpenQA.Selenium.Interactions;
 using SixLabors.ImageSharp.Formats.Png;
 using TeachersTimetable.Models;
@@ -28,6 +29,7 @@ public class ParserService : IParserService
     private readonly IMongoService _mongoService;
     private readonly IBotService _botService;
     private readonly IConfig<MainConfig> _config;
+    private readonly IChromeService _chromeService;
 
     private const string WeekUrl =
         "https://mgkct.minskedu.gov.by/персоналии/преподавателям/расписание-занятий-на-неделю";
@@ -138,11 +140,13 @@ public class ParserService : IParserService
     private static string LastDayHtmlContent { get; set; }
     private static string LastWeekHtmlContent { get; set; }
 
-    public ParserService(IMongoService mongoService, IBotService botService, IConfig<MainConfig> config)
+    public ParserService(IMongoService mongoService, IBotService botService, IConfig<MainConfig> config,
+        IChromeService chromeService)
     {
         this._mongoService = mongoService;
         this._botService = botService;
         this._config = config;
+        this._chromeService = chromeService;
 
         var parseTimer = new Timer(1_000_000)
         {
@@ -167,73 +171,79 @@ public class ParserService : IParserService
         Console.WriteLine("Start day parse");
 
         var teacherInfos = new List<TeacherInfo>();
-        var driver = ChromeService.Driver;
-
-        driver.Navigate().GoToUrl(DayUrl);
-        Thread.Sleep(1500);
-
-        var content = driver.FindElement(By.Id("wrapperTables"));
-
-        if (content is null) return Task.CompletedTask;
-
-        LastDayHtmlContent = content.Text;
-        TempTimetable.Clear();
-
-        var teachersAndLessons = content.FindElements(By.XPath(".//div")).ToList();
-
-        foreach (var teacher in this.Teachers)
+        var (service, options, delay) = this._chromeService.Create();
+        using (FirefoxDriver driver = new FirefoxDriver(service, options, delay))
         {
-            try
+            driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
+
+
+            driver.Navigate().GoToUrl(DayUrl);
+            Thread.Sleep(1500);
+
+            var content = driver.FindElement(By.Id("wrapperTables"));
+
+            if (content is null) return Task.CompletedTask;
+
+            LastDayHtmlContent = content.Text;
+            TempTimetable.Clear();
+
+            var teachersAndLessons = content.FindElements(By.XPath(".//div")).ToList();
+
+            foreach (var teacher in this.Teachers)
             {
-                for (var i = 1; i < teachersAndLessons.Count; i += 2)
+                try
                 {
-                    if (teachersAndLessons[i - 1].Text.Split('-')[0].Trim() != teacher) continue;
-                    var teacherInfo = new TeacherInfo();
-                    var lessons = new List<Lesson>();
-
-                    var lessonsElements = teachersAndLessons[i].FindElements(By.XPath(".//table/tbody/tr")).ToList();
-
-                    if (lessonsElements.Count < 1)
+                    for (var i = 1; i < teachersAndLessons.Count; i += 2)
                     {
-                        teacherInfo.Lessons = lessons;
-                        teacherInfo.Name = teacher;
-                        teacherInfos.Add(teacherInfo);
-                        continue;
-                    }
+                        if (teachersAndLessons[i - 1].Text.Split('-')[0].Trim() != teacher) continue;
+                        var teacherInfo = new TeacherInfo();
+                        var lessons = new List<Lesson>();
 
-                    var lessonNumbers = lessonsElements[0].FindElements(By.XPath(".//th")).ToList();
-                    var lessonNames = lessonsElements[1].FindElements(By.XPath(".//td")).ToList();
-                    var lessonCabinets = lessonsElements[2].FindElements(By.XPath(".//td")).ToList();
+                        var lessonsElements =
+                            teachersAndLessons[i].FindElements(By.XPath(".//table/tbody/tr")).ToList();
 
-                    for (var j = 0; j < lessonNumbers.Count; j++)
-                    {
-                        var cabinet = lessonCabinets.Count < lessonNumbers.Count && lessonCabinets.Count <= j
-                            ? "-"
-                            : lessonCabinets[j].Text;
-
-                        lessons.Add(new Lesson()
+                        if (lessonsElements.Count < 1)
                         {
-                            Index = int.Parse(lessonNumbers[j].Text.Replace("№", "")),
-                            Cabinet = cabinet,
-                            Group = lessonNames[j].Text
-                        });
+                            teacherInfo.Lessons = lessons;
+                            teacherInfo.Name = teacher;
+                            teacherInfos.Add(teacherInfo);
+                            continue;
+                        }
+
+                        var lessonNumbers = lessonsElements[0].FindElements(By.XPath(".//th")).ToList();
+                        var lessonNames = lessonsElements[1].FindElements(By.XPath(".//td")).ToList();
+                        var lessonCabinets = lessonsElements[2].FindElements(By.XPath(".//td")).ToList();
+
+                        for (var j = 0; j < lessonNumbers.Count; j++)
+                        {
+                            var cabinet = lessonCabinets.Count < lessonNumbers.Count && lessonCabinets.Count <= j
+                                ? "-"
+                                : lessonCabinets[j].Text;
+
+                            lessons.Add(new Lesson()
+                            {
+                                Index = int.Parse(lessonNumbers[j].Text.Replace("№", "")),
+                                Cabinet = cabinet,
+                                Group = lessonNames[j].Text
+                            });
+                        }
+
+                        teacherInfo.Name = teacher;
+                        teacherInfo.Lessons = lessons;
+                        teacherInfos.Add(teacherInfo);
+                        break;
                     }
-
-                    teacherInfo.Name = teacher;
-                    teacherInfo.Lessons = lessons;
-                    teacherInfos.Add(teacherInfo);
-                    break;
                 }
-            }
-            catch (Exception e)
-            {
-                if (this._config.Entries.Administrators is not { } administrators) continue;
-                var adminTelegramId = administrators.FirstOrDefault();
-                if (adminTelegramId == default) continue;
+                catch (Exception e)
+                {
+                    if (this._config.Entries.Administrators is not { } administrators) continue;
+                    var adminTelegramId = administrators.FirstOrDefault();
+                    if (adminTelegramId == default) continue;
 
-                this._botService.SendMessage(new SendMessageArgs(adminTelegramId, e.Message));
-                this._botService.SendMessage(new SendMessageArgs(adminTelegramId,
-                    "Ошибка дневного расписания в учителе: " + teacher));
+                    this._botService.SendMessage(new SendMessageArgs(adminTelegramId, e.Message));
+                    this._botService.SendMessage(new SendMessageArgs(adminTelegramId,
+                        "Ошибка дневного расписания в учителе: " + teacher));
+                }
             }
         }
 
@@ -321,47 +331,51 @@ public class ParserService : IParserService
     {
         Console.WriteLine("Start week parse");
 
-        var driver = ChromeService.Driver;
-        driver.Navigate().GoToUrl(WeekUrl);
-        Thread.Sleep(1500);
-
-        var content = driver.FindElement(By.ClassName("entry")).Text;
-        if (content != default) LastWeekHtmlContent = content;
-
-
-        foreach (var teacher in this.Teachers)
+        var (service, options, delay) = this._chromeService.Create();
+        using (FirefoxDriver driver = new FirefoxDriver(service, options, delay))
         {
-            try
+            driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
+            driver.Navigate().GoToUrl(WeekUrl);
+            Thread.Sleep(1500);
+
+            var content = driver.FindElement(By.ClassName("entry")).Text;
+            if (content != default) LastWeekHtmlContent = content;
+
+
+            foreach (var teacher in this.Teachers)
             {
-                driver.Navigate().GoToUrl($"{WeekUrl}?teacher={teacher.Replace(" ", "+")}");
-                Thread.Sleep(1500);
-
-                Utils.ModifyUnnecessaryElementsOnWebsite(ref driver);
-
-                var element = driver.FindElement(By.TagName("h2"));
-                if (element == default) continue;
-
-                var actions = new Actions(driver);
-                actions.MoveToElement(element).Perform();
-
-                var screenshot = (driver as ITakesScreenshot).GetScreenshot();
-                var image = Image.Load(screenshot.AsByteArray);
-
-                image.Mutate(x => x.Resize((int)(image.Width / 1.5), (int)(image.Height / 1.5)));
-
-                await image.SaveAsync($"./cachedImages/{teacher}.png");
-            }
-            catch (Exception e)
-            {
-                var entriesAdministrators = this._config.Entries.Administrators;
-                if (entriesAdministrators != null)
+                try
                 {
-                    var adminTelegramId = entriesAdministrators.FirstOrDefault();
-                    if (adminTelegramId == default) continue;
+                    driver.Navigate().GoToUrl($"{WeekUrl}?teacher={teacher.Replace(" ", "+")}");
+                    Thread.Sleep(1500);
 
-                    this._botService.SendMessage(new SendMessageArgs(adminTelegramId, e.Message));
-                    this._botService.SendMessage(new SendMessageArgs(adminTelegramId,
-                        "Ошибка в преподавателе: " + teacher));
+                    Utils.ModifyUnnecessaryElementsOnWebsite(driver);
+
+                    var element = driver.FindElement(By.TagName("h2"));
+                    if (element == default) continue;
+
+                    var actions = new Actions(driver);
+                    actions.MoveToElement(element).Perform();
+
+                    var screenshot = (driver as ITakesScreenshot).GetScreenshot();
+                    var image = Image.Load(screenshot.AsByteArray);
+
+                    image.Mutate(x => x.Resize((int)(image.Width / 1.5), (int)(image.Height / 1.5)));
+
+                    await image.SaveAsync($"./cachedImages/{teacher}.png");
+                }
+                catch (Exception e)
+                {
+                    var entriesAdministrators = this._config.Entries.Administrators;
+                    if (entriesAdministrators != null)
+                    {
+                        var adminTelegramId = entriesAdministrators.FirstOrDefault();
+                        if (adminTelegramId == default) continue;
+
+                        this._botService.SendMessage(new SendMessageArgs(adminTelegramId, e.Message));
+                        this._botService.SendMessage(new SendMessageArgs(adminTelegramId,
+                            "Ошибка в преподавателе: " + teacher));
+                    }
                 }
             }
         }
@@ -391,47 +405,46 @@ public class ParserService : IParserService
             return;
         }
 
-        using (var ms = new MemoryStream())
-        {
-            await image.SaveAsync(ms, new PngEncoder());
+        using var ms = new MemoryStream();
+        await image.SaveAsPngAsync(ms);
 
-            await this._botService.SendPhotoAsync(new SendPhotoArgs(user.UserId,
-                new InputFile(ms.ToArray(), $"Teacher - {user.Teacher}")));
-
-            await ms.DisposeAsync();
-            image.Dispose();
-        }
+        await this._botService.SendPhotoAsync(new SendPhotoArgs(user.UserId,
+            new InputFile(ms.ToArray(), $"Teacher - {user.Teacher}")));
     }
 
     public async Task UpdateTimetableTick()
     {
-        bool parseDay = false, parseWeek = false;
-        var driver = ChromeService.Driver;
-
-        //Day
-        driver.Navigate().GoToUrl(DayUrl);
-        Thread.Sleep(1500);
-        
-        var contentElement = driver.FindElement(By.Id("wrapperTables")).Text;
-        var emptyContent = driver.FindElements(By.XPath(".//div")).ToList().Count < 5;
-
-        if (!emptyContent && LastDayHtmlContent != contentElement)
-        {
-            parseDay = true;
-        }
-
-        driver.Navigate().GoToUrl(WeekUrl);
-        Thread.Sleep(1500);
-
-        var content = driver.FindElement(By.ClassName("entry")).Text;
-
-        if (content != default && LastWeekHtmlContent != content)
-        {
-            parseWeek = true;
-        }
-
         try
         {
+            bool parseDay = false, parseWeek = false;
+            var (service, options, delay) = this._chromeService.Create();
+            using (FirefoxDriver driver = new FirefoxDriver(service, options, delay))
+            {
+                //Day
+                driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
+                driver.Navigate().GoToUrl(DayUrl);
+                Thread.Sleep(1500);
+
+                var contentElement = driver.FindElement(By.Id("wrapperTables")).Text;
+                var emptyContent = driver.FindElements(By.XPath(".//div")).ToList().Count < 5;
+
+                if (!emptyContent && LastDayHtmlContent != contentElement)
+                {
+                    parseDay = true;
+                }
+
+                driver.Navigate().GoToUrl(WeekUrl);
+                Thread.Sleep(1500);
+
+                var content = driver.FindElement(By.ClassName("entry")).Text;
+
+                if (content != default && LastWeekHtmlContent != content)
+                {
+                    parseWeek = true;
+                }
+            }
+
+
             if (parseWeek) await this.ParseWeek();
             if (parseDay) await this.ParseDay();
         }
