@@ -45,29 +45,24 @@ namespace TeachersTimetable.Services
         {
             if (teacherName is null) return false;
 
-            var correctTeacherName = string.Empty;
-            foreach (var teacher in this._parserService.Teachers)
+            var correctTeacherName = this._parserService.Teachers.FirstOrDefault(
+                teacher => teacher.ToLower().Trim().Contains(teacherName.ToLower().Trim()));
+            
+            if (correctTeacherName is not {})
             {
-                if (!teacher.ToLower().Trim().Contains(teacherName.ToLower().Trim())) continue;
-                correctTeacherName = teacher.Trim();
-                break;
-            }
-
-            if (correctTeacherName == string.Empty)
-            {
-                this._botService.SendMessage(new SendMessageArgs(telegramUser.Id, $"Преподаватель не найден"));
+                await this._botService.SendMessageAsync(new SendMessageArgs(telegramUser.Id, "Преподаватель не найден"));
                 return false;
             }
 
             var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
             var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First() ??
-                       await CreateAccount(telegramUser);
+                       await this.CreateAccount(telegramUser);
 
             user!.Teacher = correctTeacherName;
             var update = Builders<Models.User>.Update.Set(u => u.Teacher, user.Teacher);
             await userCollection.UpdateOneAsync(u => u.UserId == telegramUser.Id, update);
 
-            this._botService.SendMessage(new SendMessageArgs(telegramUser.Id,
+            await this._botService.SendMessageAsync(new SendMessageArgs(telegramUser.Id,
                 $"Вы успешно подписались на расписание преподавателя {correctTeacherName}"));
 
             return true;
@@ -77,7 +72,7 @@ namespace TeachersTimetable.Services
         {
             var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
             var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First() ??
-                       await CreateAccount(telegramUser);
+                       await this.CreateAccount(telegramUser);
 
             if (user is null) return;
             
