@@ -170,6 +170,7 @@ public class ParserService : IParserService
         var driver = ChromeService.Driver;
 
         driver.Navigate().GoToUrl(DayUrl);
+        Thread.Sleep(1500);
 
         var content = driver.FindElement(By.Id("wrapperTables"));
 
@@ -322,51 +323,47 @@ public class ParserService : IParserService
 
         var driver = ChromeService.Driver;
         driver.Navigate().GoToUrl(WeekUrl);
+        Thread.Sleep(1500);
 
         var content = driver.FindElement(By.ClassName("entry")).Text;
         if (content != default) LastWeekHtmlContent = content;
 
-        try
+
+        foreach (var teacher in this.Teachers)
         {
-            foreach (var teacher in this.Teachers)
+            try
             {
-                try
+                driver.Navigate().GoToUrl($"{WeekUrl}?teacher={teacher.Replace(" ", "+")}");
+                Thread.Sleep(1500);
+
+                Utils.ModifyUnnecessaryElementsOnWebsite(ref driver);
+
+                var element = driver.FindElement(By.TagName("h2"));
+                if (element == default) continue;
+
+                var actions = new Actions(driver);
+                actions.MoveToElement(element).Perform();
+
+                var screenshot = (driver as ITakesScreenshot).GetScreenshot();
+                var image = Image.Load(screenshot.AsByteArray);
+
+                image.Mutate(x => x.Resize((int)(image.Width / 1.5), (int)(image.Height / 1.5)));
+
+                await image.SaveAsync($"./cachedImages/{teacher}.png");
+            }
+            catch (Exception e)
+            {
+                var entriesAdministrators = this._config.Entries.Administrators;
+                if (entriesAdministrators != null)
                 {
-                    driver.Navigate().GoToUrl($"{WeekUrl}?teacher={teacher.Replace(" ", "+")}");
+                    var adminTelegramId = entriesAdministrators.FirstOrDefault();
+                    if (adminTelegramId == default) continue;
 
-                    Utils.ModifyUnnecessaryElementsOnWebsite(ref driver);
-
-                    var element = driver.FindElement(By.TagName("h2"));
-                    if (element == default) continue;
-
-                    var actions = new Actions(driver);
-                    actions.MoveToElement(element).Perform();
-
-                    var screenshot = (driver as ITakesScreenshot).GetScreenshot();
-                    var image = Image.Load(screenshot.AsByteArray);
-
-                    image.Mutate(x => x.Resize((int)(image.Width / 1.5), (int)(image.Height / 1.5)));
-
-                    await image.SaveAsync($"./cachedImages/{teacher}.png");
-                }
-                catch (Exception e)
-                {
-                    var entriesAdministrators = this._config.Entries.Administrators;
-                    if (entriesAdministrators != null)
-                    {
-                        var adminTelegramId = entriesAdministrators.FirstOrDefault();
-                        if (adminTelegramId == default) continue;
-
-                        this._botService.SendMessage(new SendMessageArgs(adminTelegramId, e.Message));
-                        this._botService.SendMessage(new SendMessageArgs(adminTelegramId,
-                            "Ошибка в преподавателе: " + teacher));
-                    }
+                    this._botService.SendMessage(new SendMessageArgs(adminTelegramId, e.Message));
+                    this._botService.SendMessage(new SendMessageArgs(adminTelegramId,
+                        "Ошибка в преподавателе: " + teacher));
                 }
             }
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e);
         }
 
         Console.WriteLine("End week parse");
@@ -389,7 +386,8 @@ public class ParserService : IParserService
 
         if (image is not { })
         {
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, "Увы, данный преподаватель не найден"));
+            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
+                "Увы, данный преподаватель не найден"));
             return;
         }
 
@@ -404,6 +402,7 @@ public class ParserService : IParserService
             image.Dispose();
         }
     }
+
     public async Task UpdateTimetableTick()
     {
         bool parseDay = false, parseWeek = false;
@@ -411,15 +410,18 @@ public class ParserService : IParserService
 
         //Day
         driver.Navigate().GoToUrl(DayUrl);
-        var contentElement = driver.FindElement(By.Id("wrapperTables"));
-        var emptyContent = driver.FindElements(By.XPath(".//div")).ToList().Count < 5;
+        Thread.Sleep(1500);
         
-        if (!emptyContent && LastDayHtmlContent != contentElement.Text)
+        var contentElement = driver.FindElement(By.Id("wrapperTables")).Text;
+        var emptyContent = driver.FindElements(By.XPath(".//div")).ToList().Count < 5;
+
+        if (!emptyContent && LastDayHtmlContent != contentElement)
         {
             parseDay = true;
         }
 
         driver.Navigate().GoToUrl(WeekUrl);
+        Thread.Sleep(1500);
 
         var content = driver.FindElement(By.ClassName("entry")).Text;
 
