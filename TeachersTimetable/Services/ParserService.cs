@@ -176,7 +176,7 @@ public class ParserService : IParserService
 
 
             driver.Navigate().GoToUrl(DayUrl);
-            //Thread.Sleep(1500);
+            Thread.Sleep(1000);
 
             var content = driver.FindElement(By.Id("wrapperTables"));
 
