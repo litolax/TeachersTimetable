@@ -173,6 +173,8 @@ public class ParserService : IParserService
         using (FirefoxDriver driver = new FirefoxDriver(service, options, delay))
         {
             driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
+            driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(15);
+            driver.Manage().Timeouts().AsynchronousJavaScript = TimeSpan.FromSeconds(30);
             driver.Navigate().GoToUrl(DayUrl);
             Thread.Sleep(DriverTimeout);
 
@@ -323,6 +325,8 @@ public class ParserService : IParserService
         using (FirefoxDriver driver = new FirefoxDriver(service, options, delay))
         {
             driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
+            driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(15);
+            driver.Manage().Timeouts().AsynchronousJavaScript = TimeSpan.FromSeconds(30);
             driver.Navigate().GoToUrl(WeekUrl);
             Thread.Sleep(DriverTimeout);
 
@@ -399,6 +403,8 @@ public class ParserService : IParserService
             {
                 //Day
                 driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
+                driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(15);
+                driver.Manage().Timeouts().AsynchronousJavaScript = TimeSpan.FromSeconds(30);
                 driver.Navigate().GoToUrl(DayUrl);
                 Thread.Sleep(DriverTimeout);
 
