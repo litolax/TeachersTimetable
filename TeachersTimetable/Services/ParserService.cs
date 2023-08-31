@@ -2,12 +2,10 @@
 using OpenQA.Selenium;
 using OpenQA.Selenium.Firefox;
 using OpenQA.Selenium.Interactions;
-using SixLabors.ImageSharp.Formats.Png;
 using TeachersTimetable.Models;
 using Telegram.BotAPI.AvailableMethods;
 using Telegram.BotAPI.AvailableMethods.FormattingOptions;
 using Telegram.BotAPI.AvailableTypes;
-using TelegramBot_Timetable_Core.Config;
 using Timer = System.Timers.Timer;
 using User = Telegram.BotAPI.AvailableTypes.User;
 using TelegramBot_Timetable_Core.Services;
@@ -28,7 +26,6 @@ public class ParserService : IParserService
 {
     private readonly IMongoService _mongoService;
     private readonly IBotService _botService;
-    private readonly IConfig<MainConfig> _config;
     private readonly IChromeService _chromeService;
 
     private const string WeekUrl =
@@ -36,6 +33,8 @@ public class ParserService : IParserService
 
     private const string DayUrl =
         "https://mgkct.minskedu.gov.by/персоналии/преподавателям/расписание-занятий-на-день";
+
+    private const int DriverTimeout = 2000;
 
     public List<string> Teachers { get; } = new()
     {
@@ -134,17 +133,18 @@ public class ParserService : IParserService
         "Щербич Е. В.",
         "Щуко О. И.",
     };
+
     private static List<Timetable> Timetable { get; set; } = new();
     private static string LastDayHtmlContent { get; set; }
     private static string LastWeekHtmlContent { get; set; }
 
-    public ParserService(IMongoService mongoService, IBotService botService, IConfig<MainConfig> config,
-        IChromeService chromeService)
+    public ParserService(IMongoService mongoService, IBotService botService, IChromeService chromeService)
     {
         this._mongoService = mongoService;
         this._botService = botService;
-        this._config = config;
         this._chromeService = chromeService;
+
+        if (!Directory.Exists("./cachedImages")) Directory.CreateDirectory("./cachedImages");
 
         var parseTimer = new Timer(1_000_000)
         {
@@ -173,16 +173,11 @@ public class ParserService : IParserService
         using (FirefoxDriver driver = new FirefoxDriver(service, options, delay))
         {
             driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
-
-
             driver.Navigate().GoToUrl(DayUrl);
-            Thread.Sleep(1000);
+            Thread.Sleep(DriverTimeout);
 
             var content = driver.FindElement(By.Id("wrapperTables"));
-
             if (content is null) return Task.CompletedTask;
-
-            LastDayHtmlContent = content.Text;
 
             var teachersAndLessons = content.FindElements(By.XPath(".//div")).ToList();
 
@@ -233,12 +228,8 @@ public class ParserService : IParserService
                 }
                 catch (Exception e)
                 {
-                    if (this._config.Entries.Administrators is not { } administrators) continue;
-                    var adminTelegramId = administrators.FirstOrDefault();
-                    if (adminTelegramId == default) continue;
-
-                    this._botService.SendMessage(new SendMessageArgs(adminTelegramId, e.Message));
-                    this._botService.SendMessage(new SendMessageArgs(adminTelegramId,
+                    this._botService.SendAdminMessage(new SendMessageArgs(0, e.Message));
+                    this._botService.SendAdminMessage(new SendMessageArgs(0,
                         "Ошибка дневного расписания в учителе: " + teacher));
                 }
             }
@@ -333,18 +324,14 @@ public class ParserService : IParserService
         {
             driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
             driver.Navigate().GoToUrl(WeekUrl);
-            //Thread.Sleep(1500);
-
-            var content = driver.FindElement(By.ClassName("entry")).Text;
-            if (content != default) LastWeekHtmlContent = content;
-
+            Thread.Sleep(DriverTimeout);
 
             foreach (var teacher in this.Teachers)
             {
                 try
                 {
                     driver.Navigate().GoToUrl($"{WeekUrl}?teacher={teacher.Replace(" ", "+")}");
-                    //Thread.Sleep(1500);
+                    Thread.Sleep(DriverTimeout - 1850);
 
                     Utils.ModifyUnnecessaryElementsOnWebsite(driver);
 
@@ -363,18 +350,10 @@ public class ParserService : IParserService
                 }
                 catch (Exception e)
                 {
-                    var entriesAdministrators = this._config.Entries.Administrators;
-                    if (entriesAdministrators != null)
-                    {
-                        var adminTelegramId = entriesAdministrators.FirstOrDefault();
-                        if (adminTelegramId == default) continue;
-
-                        this._botService.SendMessage(new SendMessageArgs(adminTelegramId, e.Message));
-                        this._botService.SendMessage(new SendMessageArgs(adminTelegramId,
-                            "Ошибка в преподавателе: " + teacher));
-                    }
+                    this._botService.SendAdminMessage(new SendMessageArgs(0, e.Message));
+                    this._botService.SendAdminMessage(new SendMessageArgs(0, "Ошибка в преподавателе: " + teacher));
                 }
-            }
+            };
         }
 
         Console.WriteLine("End week parse");
@@ -421,7 +400,7 @@ public class ParserService : IParserService
                 //Day
                 driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
                 driver.Navigate().GoToUrl(DayUrl);
-                //Thread.Sleep(1500);
+                Thread.Sleep(DriverTimeout);
 
                 var contentElement = driver.FindElement(By.Id("wrapperTables")).Text;
                 var emptyContent = driver.FindElements(By.XPath(".//div")).ToList().Count < 5;
@@ -429,22 +408,33 @@ public class ParserService : IParserService
                 if (!emptyContent && LastDayHtmlContent != contentElement)
                 {
                     parseDay = true;
+                    LastDayHtmlContent = contentElement;
                 }
 
                 driver.Navigate().GoToUrl(WeekUrl);
-                //Thread.Sleep(1500);
+                Thread.Sleep(DriverTimeout);
 
                 var content = driver.FindElement(By.ClassName("entry")).Text;
 
                 if (content != default && LastWeekHtmlContent != content)
                 {
                     parseWeek = true;
+                    LastWeekHtmlContent = content;
                 }
             }
+            
+            if (parseWeek)
+            {
+                await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "Start parse week"));
+                await this.ParseWeek();
+            }
 
-
-            if (parseWeek) await this.ParseWeek();
-            if (parseDay) await this.ParseDay();
+            if (parseDay)
+            {
+                await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "Start parse day"));
+                await this.ParseDay();
+            }
+            
             Console.WriteLine("End update tick");
         }
         catch (Exception e)
