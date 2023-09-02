@@ -9,6 +9,7 @@ using Telegram.BotAPI.AvailableTypes;
 using Timer = System.Timers.Timer;
 using User = Telegram.BotAPI.AvailableTypes.User;
 using TelegramBot_Timetable_Core.Services;
+using File = System.IO.File;
 
 namespace TeachersTimetable.Services;
 
@@ -369,7 +370,7 @@ public class ParserService : IParserService
         var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First();
         if (user is null) return;
 
-        if (user.Teacher is null)
+        if (user.Teacher is null || !File.Exists($"./cachedImages/{user.Teacher}.png"))
         {
             await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
                 "Вы еще не выбрали преподавателя"));
