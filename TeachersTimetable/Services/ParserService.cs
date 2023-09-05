@@ -178,7 +178,7 @@ public class ParserService : IParserService
             var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
 
             driver.Navigate().GoToUrl(DayUrl);
-            Thread.Sleep(DriverTimeout);
+            Thread.Sleep(2000);
 
             var content = driver.FindElement(By.Id("wrapperTables"));
             wait.Until(d => content.Displayed);
