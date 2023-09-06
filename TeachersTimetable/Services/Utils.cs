@@ -31,11 +31,13 @@ public static class Utils
         driver.ExecuteScript("arguments[0].style='display: none'", pageShareButtons);
 
         var all = driver.FindElement(By.CssSelector("*"));
-        driver.ExecuteScript("arguments[0].style='overflow-y: hidden; overflow-x: hidden;'", all);
-        
+        driver.ExecuteScript("arguments[0].style='overflow-y: hidden; overflow-x: hidden'", all);
+
+
+        driver.ExecuteScript("arguments[0].style='display : none'", driver.FindElement(By.TagName("h1")));
         driver.Manage().Window.Size = new Size(1920, container.Size.Height - 30);
     }
-    
+
     public static string CreateDayTimetableMessage(TeacherInfo teacherInfo)
     {
         var message = string.Empty;
@@ -54,5 +56,23 @@ public static class Utils
         }
 
         return message;
+    }
+
+
+    public static void HideTeacherElements(FirefoxDriver driver, IEnumerable<IWebElement> elements)
+    {
+        foreach (var element in elements)
+        {
+            driver.ExecuteScript("arguments[0].style='display: none;'", element);
+        }
+    }
+
+
+    public static void ShowTeacherElements(FirefoxDriver driver, IEnumerable<IWebElement> elements)
+    {
+        foreach (var element in elements)
+        {
+            driver.ExecuteScript("arguments[0].style='display: block;'", element);
+        }
     }
 }

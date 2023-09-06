@@ -11,6 +11,7 @@ using Timer = System.Timers.Timer;
 using User = Telegram.BotAPI.AvailableTypes.User;
 using TelegramBot_Timetable_Core.Services;
 using File = System.IO.File;
+using Size = System.Drawing.Size;
 
 namespace TeachersTimetable.Services;
 
@@ -192,7 +193,7 @@ public class ParserService : IParserService
                     var parsedTeacherName = teachersAndLessons[i - 1].Text.Split('-')[0].Trim();
                     teacher = this.Teachers.FirstOrDefault(t => t == parsedTeacherName);
                     if (teacher is null) continue;
-                    
+
                     var teacherInfo = new TeacherInfo();
                     var lessons = new List<Lesson>();
 
@@ -328,40 +329,57 @@ public class ParserService : IParserService
             driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
             var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
 
-            // driver.Navigate().GoToUrl(WeekUrl);
+            driver.Navigate().GoToUrl(WeekUrl);
             // Thread.Sleep(DriverTimeout);
+            var element = driver.FindElement(By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div"));
+            wait.Until(d => element.Displayed);
+            Utils.ModifyUnnecessaryElementsOnWebsite(driver);
 
-            foreach (var teacher in this.Teachers)
+            if (element == default) return;
+            var h2 =
+                driver.FindElements(
+                    By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/h2"));
+
+            var h3 =
+                driver.FindElements(
+                    By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/h3"));
+            var table = driver.FindElements(By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div"));
+            Utils.HideTeacherElements(driver, h3);
+            Utils.HideTeacherElements(driver, h2);
+            Utils.HideTeacherElements(driver, table);
+
+            for (var i = 0; i < h2.Count; i++)
             {
+                var teacherH2 = h2[i];
+                var teacherName = string.Empty;
+                var list = new List<IWebElement> { teacherH2, h3[i], table[i] };
+                var teacher = string.Empty;
                 try
                 {
-                    driver.Navigate().GoToUrl($"{WeekUrl}?teacher={teacher.Replace(" ", "+")}");
                     //Thread.Sleep(DriverTimeout);
-
-                    Utils.ModifyUnnecessaryElementsOnWebsite(driver);
-
-                    var element = driver.FindElement(By.TagName("h2"));
-                    wait.Until(d => element.Displayed);
-                    if (element == default) continue;
-
+                    Utils.ShowTeacherElements(driver, list);
+                    var parsedTeacher = teacherH2.Text.Split('-')[1].Trim();
+                    teacher = this.Teachers.First(t => t == parsedTeacher);
                     var actions = new Actions(driver);
                     actions.MoveToElement(element).Perform();
-
+                    driver.Manage().Window.Size =
+                        new Size(1920, driver.FindElement(By.ClassName("main")).Size.Height - 30);
                     var screenshot = (driver as ITakesScreenshot).GetScreenshot();
                     var image = Image.Load(screenshot.AsByteArray);
-
                     image.Mutate(x => x.Resize((int)(image.Width / 1.5), (int)(image.Height / 1.5)));
-
                     await image.SaveAsync($"./cachedImages/{teacher}.png");
                 }
                 catch (Exception e)
                 {
-                    this._botService.SendAdminMessage(new SendMessageArgs(0, e.Message));
-                    this._botService.SendAdminMessage(new SendMessageArgs(0, "Ошибка в преподавателе: " + teacher));
+                    await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, e.Message));
+                    await this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
+                        "Ошибка в преподавателе: " + teacher));
                 }
-            }
-
-            ;
+                finally
+                {
+                    Utils.HideTeacherElements(driver, list);
+                }
+            } 
         }
 
         Console.WriteLine("End week parse");
@@ -438,12 +456,14 @@ public class ParserService : IParserService
             {
                 await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "Start parse week"));
                 await this.ParseWeek();
+                await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "Finish parse week"));
             }
 
             if (parseDay)
             {
                 await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "Start parse day"));
                 await this.ParseDay();
+                await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "Finish parse day"));
             }
 
             Console.WriteLine("End update tick");
