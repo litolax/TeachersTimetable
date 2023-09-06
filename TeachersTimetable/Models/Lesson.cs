@@ -6,17 +6,20 @@ public class Lesson
     public string Cabinet { get; set; }
     public string Group { get; set; }
     
+    public override bool Equals(object? obj)
+    {
+        if (obj == null || GetType() != obj.GetType() || obj is not Lesson other)
+        {
+            return false;
+        }
+
+        return Index == other.Index &&
+               Cabinet == other.Cabinet &&
+               Group == other.Group;
+    }
+
     public override int GetHashCode()
     {
-        unchecked
-        {
-            int hash = 17;
-            
-            hash = hash * 31 + this.Index.GetHashCode();
-            hash = hash * 31 + this.Cabinet.GetHashCode();
-            hash = hash * 31 + this.Group.GetHashCode();
-
-            return hash;
-        }
+        return HashCode.Combine(Index, Cabinet, Group);
     }
 }

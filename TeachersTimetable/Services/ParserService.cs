@@ -270,6 +270,9 @@ public class ParserService : IParserService
             }
 
             teacherInfo.Lessons = teacherInfo.Lessons.OrderBy(l => l.Index).ToList();
+            var teacherInfoFromTimetable = Timetable.LastOrDefault()?.TeacherInfos.FirstOrDefault(t=>t.Name == teacherInfo.Name);
+            if(teacherInfoFromTimetable is null || teacherInfoFromTimetable.Equals(teacherInfo)) continue;
+            this._botService.SendAdminMessageAsync(new SendMessageArgs(0, $"Расписание у преподавателя {teacherInfo.Name}"));
         }
 
         Timetable.Clear();
@@ -461,14 +464,14 @@ public class ParserService : IParserService
             {
                 await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "Start parse week"));
                 await this.ParseWeek();
-                await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "Finish parse week"));
+                await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "End parse week"));
             }
 
             if (parseDay)
             {
                 await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "Start parse day"));
                 await this.ParseDay();
-                await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "Finish parse day"));
+                await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "End parse day"));
             }
 
             Console.WriteLine("End update tick");
