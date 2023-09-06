@@ -134,6 +134,11 @@ public class ParserService : IParserService
         "Шеметов И. В.",
         "Щербич Е. В.",
         "Щуко О. И.",
+        "Потоцкий Д. С.",
+        "Петрович В. Л.",
+        "Петуховский М. С.",
+        "Песняк И. М.",
+        "Камельчук Ю. А."
     };
 
     private static List<Timetable> Timetable { get; set; } = new();
@@ -351,14 +356,14 @@ public class ParserService : IParserService
             for (var i = 0; i < h2.Count; i++)
             {
                 var teacherH2 = h2[i];
-                var teacherName = string.Empty;
+                var parsedTeacher = string.Empty;
                 var list = new List<IWebElement> { teacherH2, h3[i], table[i] };
                 var teacher = string.Empty;
                 try
                 {
                     //Thread.Sleep(DriverTimeout);
                     Utils.ShowTeacherElements(driver, list);
-                    var parsedTeacher = teacherH2.Text.Split('-')[1].Trim();
+                    parsedTeacher = teacherH2.Text.Split('-')[1].Trim();
                     teacher = this.Teachers.First(t => t == parsedTeacher);
                     var actions = new Actions(driver);
                     actions.MoveToElement(element).Perform();
@@ -373,7 +378,7 @@ public class ParserService : IParserService
                 {
                     await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, e.Message));
                     await this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
-                        "Ошибка в преподавателе: " + teacher));
+                        "Ошибка в преподавателе: " + teacher + "(parsed: )" + parsedTeacher));
                 }
                 finally
                 {
