@@ -38,8 +38,6 @@ public class ParserService : IParserService
     private const string DayUrl =
         "https://mgkct.minskedu.gov.by/персоналии/преподавателям/расписание-занятий-на-день";
 
-    private const int DriverTimeout = 100;
-
     public List<string> Teachers { get; } = new()
     {
         "Амброжи Н. М.",
@@ -184,9 +182,8 @@ public class ParserService : IParserService
             var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
 
             driver.Navigate().GoToUrl(DayUrl);
-            Thread.Sleep(2000);
 
-            var content = driver.FindElement(By.Id("wrapperTables"));
+            var content = driver.FindElement(By.XPath("//*[@id=\"wrapperTables\"]"));
             wait.Until(d => content.Displayed);
             if (content is null) return;
 
@@ -323,7 +320,7 @@ public class ParserService : IParserService
             var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
 
             driver.Navigate().GoToUrl(WeekUrl);
-            // Thread.Sleep(DriverTimeout);
+
             var element = driver.FindElement(By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div"));
             wait.Until(d => element.Displayed);
             Utils.ModifyUnnecessaryElementsOnWebsite(driver);
@@ -349,7 +346,6 @@ public class ParserService : IParserService
                 var teacher = string.Empty;
                 try
                 {
-                    //Thread.Sleep(DriverTimeout);
                     Utils.ShowTeacherElements(driver, list);
                     parsedTeacher = teacherH2.Text.Split('-')[1].Trim();
                     teacher = this.Teachers.First(t => t == parsedTeacher);
@@ -421,9 +417,8 @@ public class ParserService : IParserService
                 var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
 
                 driver.Navigate().GoToUrl(DayUrl);
-                Thread.Sleep(DriverTimeout);
 
-                var contentElement = driver.FindElement(By.Id("wrapperTables"));
+                var contentElement = driver.FindElement(By.XPath("//*[@id=\"wrapperTables\"]"));
                 wait.Until(d => contentElement.Displayed);
                 var emptyContent = driver.FindElements(By.XPath(".//div")).ToList().Count < 5;
 
@@ -434,7 +429,6 @@ public class ParserService : IParserService
                 }
 
                 driver.Navigate().GoToUrl(WeekUrl);
-                Thread.Sleep(DriverTimeout);
 
                 var content = driver.FindElement(By.ClassName("entry"));
                 wait.Until(d => content.Displayed);
