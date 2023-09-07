@@ -6,31 +6,25 @@ using OpenQA.Selenium.Interactions;
 using OpenQA.Selenium.Support.UI;
 using TeachersTimetable.Models;
 using Telegram.BotAPI.AvailableMethods;
-using Telegram.BotAPI.AvailableMethods.FormattingOptions;
-using Telegram.BotAPI.AvailableTypes;
 using TelegramBot_Timetable_Core.Services;
-using File = System.IO.File;
 using Size = System.Drawing.Size;
 using Timer = System.Timers.Timer;
-using User = Telegram.BotAPI.AvailableTypes.User;
 
 namespace TeachersTimetable.Services;
 
-public interface IParserService
+public interface IParseService
 {
     List<string> Teachers { get; }
-    Task SendDayTimetable(User telegramUser);
-    Task ParseDay();
-    Task ParseWeek();
-    Task SendWeek(User telegramUser);
+    static List<Timetable> Timetable { get; set; }
     Task UpdateTimetableTick();
 }
 
-public class ParserService : IParserService
+public class ParseService : IParseService
 {
     private readonly IMongoService _mongoService;
     private readonly IBotService _botService;
     private readonly IChromeService _chromeService;
+    private readonly IInterfaceService _interfaceService;
 
     private const string WeekUrl =
         "https://mgkct.minskedu.gov.by/персоналии/преподавателям/расписание-занятий-на-неделю";
@@ -140,15 +134,16 @@ public class ParserService : IParserService
         "Камельчук Ю. А."
     };
 
-    private static List<Timetable> Timetable { get; set; } = new();
+    public static List<Timetable> Timetable { get; set; } = new();
     private static string LastDayHtmlContent { get; set; }
     private static string LastWeekHtmlContent { get; set; }
 
-    public ParserService(IMongoService mongoService, IBotService botService, IChromeService chromeService)
+    public ParseService(IMongoService mongoService, IBotService botService, IChromeService chromeService, IInterfaceService interfaceService)
     {
         this._mongoService = mongoService;
         this._botService = botService;
         this._chromeService = chromeService;
+        this._interfaceService = interfaceService;
 
         if (!Directory.Exists("./cachedImages")) Directory.CreateDirectory("./cachedImages");
 
@@ -176,7 +171,7 @@ public class ParserService : IParserService
 
         var teacherInfos = new List<TeacherInfo>();
         var (service, options, delay) = this._chromeService.Create();
-        using (FirefoxDriver driver = new FirefoxDriver(service, options, delay))
+        using (var driver = new FirefoxDriver(service, options, delay))
         {
             driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
             var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
@@ -242,7 +237,7 @@ public class ParserService : IParserService
             }
         }
 
-        var notificationUsersList = new List<Models.User>();
+        var notificationUsersList = new List<User>();
 
         foreach (var teacherInfo in teacherInfos)
         {
@@ -272,10 +267,13 @@ public class ParserService : IParserService
             teacherInfo.Lessons = teacherInfo.Lessons.OrderBy(l => l.Index).ToList();
             var teacherInfoFromTimetable =
                 Timetable.LastOrDefault()?.TeacherInfos.FirstOrDefault(t => t.Name == teacherInfo.Name);
+            
             if (teacherInfoFromTimetable is null || teacherInfoFromTimetable.Equals(teacherInfo)) continue;
-            this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
+            
+            _ = this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
                 $"Расписание у преподавателя {teacherInfo.Name}"));
-            notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<Models.User>("Users")
+            
+            notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<User>("Users")
                     .FindAsync(u =>
                         u.Teacher != null && Regex.Replace(u.Teacher, "[^0-9]", "") == teacherInfo.Name &&
                         u.Notifications))
@@ -294,19 +292,12 @@ public class ParserService : IParserService
         {
             foreach (var user in notificationUsersList)
             {
-                _ = SendDayTimetable(user);
+                _ = this._interfaceService.SendDayTimetable(user);
             }
 
             this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
                 $"{notificationUsersList.Count} notifications sent"));
         });
-    }
-
-    public async Task SendDayTimetable(User telegramUser)
-    {
-        var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
-        var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First();
-        await this.SendDayTimetable(user);
     }
 
     public async Task ParseWeek()
@@ -374,35 +365,6 @@ public class ParserService : IParserService
         Console.WriteLine("End week parse");
     }
 
-    public async Task SendWeek(User telegramUser)
-    {
-        var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
-        var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First();
-        if (user is null) return;
-
-        if (user.Teacher is null || !File.Exists($"./cachedImages/{user.Teacher}.png"))
-        {
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
-                "Вы еще не выбрали преподавателя"));
-            return;
-        }
-
-        var image = await Image.LoadAsync($"./cachedImages/{user.Teacher}.png");
-
-        if (image is not { })
-        {
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
-                "Увы, данный преподаватель не найден"));
-            return;
-        }
-
-        using var ms = new MemoryStream();
-        await image.SaveAsPngAsync(ms);
-
-        await this._botService.SendPhotoAsync(new SendPhotoArgs(user.UserId,
-            new InputFile(ms.ToArray(), $"Teacher - {user.Teacher}")));
-    }
-
     public async Task UpdateTimetableTick()
     {
         try
@@ -458,46 +420,6 @@ public class ParserService : IParserService
         catch (Exception e)
         {
             Console.WriteLine(e);
-        }
-    }
-
-    private async Task SendDayTimetable(Models.User? user)
-    {
-        if (user is null) return;
-
-        if (user.Teacher is null)
-        {
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
-                "Вы еще не выбрали преподавателя"));
-            return;
-        }
-
-        if (Timetable.Count < 1)
-        {
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, $"У {user.Teacher} нет пар"));
-            return;
-        }
-
-        foreach (var day in Timetable)
-        {
-            var message = day.Date + "\n";
-
-            foreach (var teacherInfo in day.TeacherInfos.Where(teacherInfo => user.Teacher == teacherInfo.Name))
-            {
-                if (teacherInfo.Lessons.Count < 1)
-                {
-                    message = $"У {teacherInfo.Name} нет пар";
-                    continue;
-                }
-
-                message = Utils.CreateDayTimetableMessage(teacherInfo);
-            }
-
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
-                message.Trim().Length <= 1 ? "У выбранного преподавателя нет пар" : message)
-            {
-                ParseMode = ParseMode.Markdown
-            });
         }
     }
 }

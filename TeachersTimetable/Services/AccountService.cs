@@ -17,13 +17,13 @@ namespace TeachersTimetable.Services
     public class AccountService : IAccountService
     {
         private readonly IMongoService _mongoService;
-        private readonly IParserService _parserService;
+        private readonly IParseService _parseService;
         private readonly IBotService _botService;
 
-        public AccountService(IMongoService mongoService, IParserService parserService, IBotService botService)
+        public AccountService(IMongoService mongoService, IParseService parseService, IBotService botService)
         {
             this._mongoService = mongoService;
-            this._parserService = parserService;
+            this._parseService = parseService;
             this._botService = botService;
         }
 
@@ -45,7 +45,7 @@ namespace TeachersTimetable.Services
         {
             if (teacherName is null) return false;
 
-            var correctTeacherName = this._parserService.Teachers.FirstOrDefault(
+            var correctTeacherName = this._parseService.Teachers.FirstOrDefault(
                 teacher => teacher.ToLower().Trim().Contains(teacherName.ToLower().Trim()));
             
             if (correctTeacherName is not {})

@@ -8,18 +8,16 @@ public class Lesson
     
     public override bool Equals(object? obj)
     {
-        if (obj == null || GetType() != obj.GetType() || obj is not Lesson other)
+        if (obj == null || this.GetType() != obj.GetType() || obj is not Lesson other)
         {
             return false;
         }
 
-        return Index == other.Index &&
-               Cabinet == other.Cabinet &&
-               Group == other.Group;
+        return this.Index == other.Index && this.Cabinet == other.Cabinet && this.Group == other.Group;
     }
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(Index, Cabinet, Group);
+        return HashCode.Combine(this.Index, this.Cabinet, this.Group);
     }
 }

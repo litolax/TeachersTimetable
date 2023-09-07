@@ -19,7 +19,7 @@ namespace TeachersTimetable
             var serviceProvider = new ServiceCollection()
                 .AddSingleton<IMongoService, MongoService>()
                 .AddSingleton<IBotService, BotService>()
-                .AddSingleton<IParserService, ParserService>()
+                .AddSingleton<IParseService, ParseService>()
                 .AddSingleton<ICommandsService, CommandsService>()
                 .AddSingleton<IInterfaceService, InterfaceService>()
                 .AddSingleton<IAccountService, AccountService>()
@@ -29,7 +29,7 @@ namespace TeachersTimetable
 
             serviceProvider.GetService<IChromeService>();
             serviceProvider.GetService<ICommandsService>();
-            var parserService = serviceProvider.GetService<IParserService>()!;
+            var parserService = serviceProvider.GetService<IParseService>()!;
             
             try
             {

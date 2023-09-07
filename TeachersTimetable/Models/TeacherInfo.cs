@@ -9,20 +9,18 @@ public class TeacherInfo
     
     public override bool Equals(object? obj)
     {
-        if (obj == null || GetType() != obj.GetType())
+        if (obj == null || this.GetType() != obj.GetType())
         {
             return false;
         }
 
         TeacherInfo other = (TeacherInfo)obj;
 
-        return Name == other.Name &&
-               Date == other.Date &&
-               Lessons.SequenceEqual(other.Lessons);
+        return this.Name == other.Name && this.Date == other.Date && this.Lessons.SequenceEqual(other.Lessons);
     }
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(Name, Date, Lessons);
+        return HashCode.Combine(this.Name, this.Date, this.Lessons);
     }
 }
