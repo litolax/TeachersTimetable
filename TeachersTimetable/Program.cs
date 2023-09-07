@@ -20,6 +20,7 @@ namespace TeachersTimetable
                 .AddSingleton<IMongoService, MongoService>()
                 .AddSingleton<IBotService, BotService>()
                 .AddSingleton<IParseService, ParseService>()
+                .AddSingleton<IDistributionService, DistributionService>()
                 .AddSingleton<ICommandsService, CommandsService>()
                 .AddSingleton<IInterfaceService, InterfaceService>()
                 .AddSingleton<IAccountService, AccountService>()

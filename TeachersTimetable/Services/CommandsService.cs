@@ -17,8 +17,10 @@ namespace TeachersTimetable.Services
         private readonly IParseService _parseService;
         private readonly IMongoService _mongoService;
         private readonly IBotService _botService;
+        private readonly IDistributionService _distributionService;
 
-        public CommandsService(IInterfaceService interfaceService, IAccountService accountService, IMongoService mongoService, IBotService botService)
+        public CommandsService(IInterfaceService interfaceService, IAccountService accountService, IMongoService mongoService, 
+            IBotService botService, IDistributionService distributionService)
         {
             Core.OnMessageReceive += this.OnMessageReceive;
 
@@ -26,6 +28,7 @@ namespace TeachersTimetable.Services
             this._accountService = accountService;
             this._mongoService = mongoService;
             this._botService = botService;
+            this._distributionService = distributionService;
         }
 
         private async void OnMessageReceive(Message message)
@@ -83,13 +86,13 @@ namespace TeachersTimetable.Services
                 }
                 case "Посмотреть расписание на день":
                 {
-                    await this._interfaceService.SendDayTimetable(sender);
+                    await this._distributionService.SendDayTimetable(sender);
                     //this._botService.SendMessage(new SendMessageArgs(sender.Id, $"Данная функция временно недоступна"));
                     break;
                 }
                 case "Посмотреть расписание на неделю":
                 {
-                    await this._interfaceService.SendWeek(sender);
+                    await this._distributionService.SendWeek(sender);
                     break;
                 }
                 case "Сменить преподавателя":
