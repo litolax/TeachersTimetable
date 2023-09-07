@@ -1,4 +1,5 @@
-﻿using MongoDB.Driver;
+﻿using System.Text.RegularExpressions;
+using MongoDB.Driver;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Firefox;
 using OpenQA.Selenium.Interactions;
@@ -7,11 +8,11 @@ using TeachersTimetable.Models;
 using Telegram.BotAPI.AvailableMethods;
 using Telegram.BotAPI.AvailableMethods.FormattingOptions;
 using Telegram.BotAPI.AvailableTypes;
-using Timer = System.Timers.Timer;
-using User = Telegram.BotAPI.AvailableTypes.User;
 using TelegramBot_Timetable_Core.Services;
 using File = System.IO.File;
 using Size = System.Drawing.Size;
+using Timer = System.Timers.Timer;
+using User = Telegram.BotAPI.AvailableTypes.User;
 
 namespace TeachersTimetable.Services;
 
@@ -171,7 +172,7 @@ public class ParserService : IParserService
         };
     }
 
-    public Task ParseDay()
+    public async Task ParseDay()
     {
         Console.WriteLine("Start day parse");
 
@@ -187,7 +188,7 @@ public class ParserService : IParserService
 
             var content = driver.FindElement(By.Id("wrapperTables"));
             wait.Until(d => content.Displayed);
-            if (content is null) return Task.CompletedTask;
+            if (content is null) return;
 
             var teachersAndLessons = content.FindElements(By.XPath(".//div")).ToList();
             var teacher = string.Empty;
@@ -244,6 +245,8 @@ public class ParserService : IParserService
             }
         }
 
+        var notificationUsersList = new List<Models.User>();
+
         foreach (var teacherInfo in teacherInfos)
         {
             var count = 0;
@@ -270,9 +273,16 @@ public class ParserService : IParserService
             }
 
             teacherInfo.Lessons = teacherInfo.Lessons.OrderBy(l => l.Index).ToList();
-            var teacherInfoFromTimetable = Timetable.LastOrDefault()?.TeacherInfos.FirstOrDefault(t=>t.Name == teacherInfo.Name);
-            if(teacherInfoFromTimetable is null || teacherInfoFromTimetable.Equals(teacherInfo)) continue;
-            this._botService.SendAdminMessageAsync(new SendMessageArgs(0, $"Расписание у преподавателя {teacherInfo.Name}"));
+            var teacherInfoFromTimetable =
+                Timetable.LastOrDefault()?.TeacherInfos.FirstOrDefault(t => t.Name == teacherInfo.Name);
+            if (teacherInfoFromTimetable is null || teacherInfoFromTimetable.Equals(teacherInfo)) continue;
+            this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
+                $"Расписание у преподавателя {teacherInfo.Name}"));
+            notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<Models.User>("Users")
+                    .FindAsync(u =>
+                        u.Teacher != null && Regex.Replace(u.Teacher, "[^0-9]", "") == teacherInfo.Name &&
+                        u.Notifications))
+                .ToList());
         }
 
         Timetable.Clear();
@@ -282,49 +292,24 @@ public class ParserService : IParserService
         });
         teacherInfos.Clear();
         Console.WriteLine("End parse day");
-        return Task.CompletedTask;
+        if (notificationUsersList.Count == 0) return;
+        _ = Task.Run(() =>
+        {
+            foreach (var user in notificationUsersList)
+            {
+                _ = SendDayTimetable(user);
+            }
+
+            this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
+                $"{notificationUsersList.Count} notifications sent"));
+        });
     }
 
     public async Task SendDayTimetable(User telegramUser)
     {
         var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
         var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First();
-        if (user is null) return;
-
-        if (user.Teacher is null)
-        {
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
-                "Вы еще не выбрали преподавателя"));
-            return;
-        }
-
-        if (Timetable.Count < 1)
-        {
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, $"У {user.Teacher} нет пар"));
-            return;
-        }
-
-        foreach (var day in Timetable)
-        {
-            var message = day.Date + "\n";
-
-            foreach (var teacherInfo in day.TeacherInfos.Where(teacherInfo => user.Teacher == teacherInfo.Name))
-            {
-                if (teacherInfo.Lessons.Count < 1)
-                {
-                    message = $"У {teacherInfo.Name} нет пар";
-                    continue;
-                }
-
-                message = Utils.CreateDayTimetableMessage(teacherInfo);
-            }
-
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
-                message.Trim().Length <= 1 ? "У выбранного преподавателя нет пар" : message)
-            {
-                ParseMode = ParseMode.Markdown
-            });
-        }
+        await this.SendDayTimetable(user);
     }
 
     public async Task ParseWeek()
@@ -387,7 +372,7 @@ public class ParserService : IParserService
                 {
                     Utils.HideTeacherElements(driver, list);
                 }
-            } 
+            }
         }
 
         Console.WriteLine("End week parse");
@@ -479,6 +464,46 @@ public class ParserService : IParserService
         catch (Exception e)
         {
             Console.WriteLine(e);
+        }
+    }
+
+    private async Task SendDayTimetable(Models.User? user)
+    {
+        if (user is null) return;
+
+        if (user.Teacher is null)
+        {
+            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
+                "Вы еще не выбрали преподавателя"));
+            return;
+        }
+
+        if (Timetable.Count < 1)
+        {
+            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, $"У {user.Teacher} нет пар"));
+            return;
+        }
+
+        foreach (var day in Timetable)
+        {
+            var message = day.Date + "\n";
+
+            foreach (var teacherInfo in day.TeacherInfos.Where(teacherInfo => user.Teacher == teacherInfo.Name))
+            {
+                if (teacherInfo.Lessons.Count < 1)
+                {
+                    message = $"У {teacherInfo.Name} нет пар";
+                    continue;
+                }
+
+                message = Utils.CreateDayTimetableMessage(teacherInfo);
+            }
+
+            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
+                message.Trim().Length <= 1 ? "У выбранного преподавателя нет пар" : message)
+            {
+                ParseMode = ParseMode.Markdown
+            });
         }
     }
 }
