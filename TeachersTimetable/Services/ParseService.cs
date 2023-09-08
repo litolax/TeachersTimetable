@@ -23,7 +23,7 @@ public class ParseService : IParseService
 {
     private readonly IMongoService _mongoService;
     private readonly IBotService _botService;
-    private readonly IChromeService _chromeService;
+    private readonly IFirefoxService _chromeService;
     private readonly IDistributionService _distributionService;
 
     private const string WeekUrl =
@@ -141,7 +141,7 @@ public class ParseService : IParseService
     private static string LastDayHtmlContent { get; set; }
     private static string LastWeekHtmlContent { get; set; }
 
-    public ParseService(IMongoService mongoService, IBotService botService, IChromeService chromeService, 
+    public ParseService(IMongoService mongoService, IBotService botService, IFirefoxService chromeService, 
         IDistributionService distributionService)
     {
         this._mongoService = mongoService;
