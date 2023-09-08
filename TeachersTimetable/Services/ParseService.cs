@@ -133,7 +133,8 @@ public class ParseService : IParseService
         "Петрович В. Л.",
         "Петуховский М. С.",
         "Песняк И. М.",
-        "Камельчук Ю. А."
+        "Камельчук Ю. А.",
+        "Плескач О. В."
     };
 
     public static List<Timetable> Timetable { get; set; } = new();
@@ -174,7 +175,8 @@ public class ParseService : IParseService
 
         var teacherInfos = new List<TeacherInfo>();
         var (service, options, delay) = this._chromeService.Create();
-        using (var driver = new FirefoxDriver(service, options, delay))
+        var day = string.Empty;
+        using (FirefoxDriver driver = new FirefoxDriver(service, options, delay))
         {
             driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
             var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
@@ -190,6 +192,7 @@ public class ParseService : IParseService
             var teacher = string.Empty;
             try
             {
+                if (teachersAndLessons.Count > 0) day = teachersAndLessons[0].Text.Split('-')[1].Trim();
                 for (var i = 1; i < teachersAndLessons.Count; i += 2)
                 {
                     var parsedTeacherName = teachersAndLessons[i - 1].Text.Split('-')[0].Trim();
@@ -287,6 +290,7 @@ public class ParseService : IParseService
         Timetable.Clear();
         Timetable.Add(new()
         {
+            Date = day,
             TeacherInfos = new List<TeacherInfo>(teacherInfos)
         });
         teacherInfos.Clear();
@@ -357,7 +361,7 @@ public class ParseService : IParseService
                 {
                     await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, e.Message));
                     await this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
-                        "Ошибка в преподавателе: " + teacher + "(parsed: )" + parsedTeacher));
+                        $"Ошибка в преподавателе: {teacher}  (parsed:{parsedTeacher})"));
                 }
                 finally
                 {

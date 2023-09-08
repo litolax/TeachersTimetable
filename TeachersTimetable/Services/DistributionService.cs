@@ -80,7 +80,7 @@ public class DistributionService : IDistributionService
 
         foreach (var day in ParseService.Timetable)
         {
-            var message = day.Date + "\n";
+            var message = string.Empty;
 
             foreach (var teacherInfo in day.TeacherInfos.Where(teacherInfo => user.Teacher == teacherInfo.Name))
             {
@@ -90,7 +90,7 @@ public class DistributionService : IDistributionService
                     continue;
                 }
 
-                message = Utils.CreateDayTimetableMessage(teacherInfo);
+                message = $"День - {day.Date}\n" + Utils.CreateDayTimetableMessage(teacherInfo);
             }
 
             await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
