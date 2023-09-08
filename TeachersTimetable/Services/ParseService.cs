@@ -277,14 +277,20 @@ public class ParseService : IParseService
             
             if (teacherInfoFromTimetable is null || teacherInfoFromTimetable.Equals(teacherInfo)) continue;
             
-            _ = this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
-                $"Расписание у преподавателя {teacherInfo.Name}"));
-            
-            notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<User>("Users")
-                    .FindAsync(u =>
-                        u.Teacher != null && Regex.Replace(u.Teacher, "[^0-9]", "") == teacherInfo.Name &&
-                        u.Notifications))
-                .ToList());
+            try
+            {
+                _ = this._botService.SendAdminMessageAsync(
+                    new SendMessageArgs(0, $"Расписание у группы {teacherInfo.Name}"));
+
+                var userList = (await this._mongoService.Database.GetCollection<User>("Users")
+                        .FindAsync(u => u.Teacher != null && u.Notifications && u.Teacher == teacherInfo.Name)).ToList();
+
+                notificationUsersList.AddRange(userList);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
         }
 
         Timetable.Clear();
@@ -298,13 +304,20 @@ public class ParseService : IParseService
         if (notificationUsersList.Count == 0) return;
         _ = Task.Run(() =>
         {
-            foreach (var user in notificationUsersList)
+            try
             {
-                _ = this._distributionService.SendDayTimetable(user);
-            }
+                foreach (var user in notificationUsersList)
+                {
+                    _ = this._distributionService.SendDayTimetable(user);
+                }
 
-            this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
-                $"{notificationUsersList.Count} notifications sent"));
+                this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
+                    $"{notificationUsersList.Count} notifications sent"));
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
         });
     }
 
