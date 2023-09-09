@@ -141,7 +141,7 @@ public class ParseService : IParseService
     private static string LastDayHtmlContent { get; set; }
     private static string LastWeekHtmlContent { get; set; }
 
-    public ParseService(IMongoService mongoService, IBotService botService, IFirefoxService firefoxService, 
+    public ParseService(IMongoService mongoService, IBotService botService, IFirefoxService firefoxService,
         IDistributionService distributionService)
     {
         this._mongoService = mongoService;
@@ -274,7 +274,7 @@ public class ParseService : IParseService
             teacherInfo.Lessons = teacherInfo.Lessons.OrderBy(l => l.Index).ToList();
             var teacherInfoFromTimetable =
                 Timetable.LastOrDefault()?.TeacherInfos.FirstOrDefault(t => t.Name == teacherInfo.Name);
-            
+
             if (teacherInfoFromTimetable is null || teacherInfoFromTimetable.Equals(teacherInfo)) continue;
             teacherUpdatedList.Add(teacherInfo.Name);
             try
@@ -283,7 +283,7 @@ public class ParseService : IParseService
                     new SendMessageArgs(0, $"Расписание у группы {teacherInfo.Name}"));
 
                 var userList = (await this._mongoService.Database.GetCollection<User>("Users")
-                        .FindAsync(u => u.Teacher != null && u.Notifications && u.Teacher == teacherInfo.Name)).ToList();
+                    .FindAsync(u => u.Teacher != null && u.Notifications && u.Teacher == teacherInfo.Name)).ToList();
 
                 notificationUsersList.AddRange(userList);
             }
@@ -293,7 +293,9 @@ public class ParseService : IParseService
             }
         }
 
-        _ = this._botService.SendAdminMessageAsync(new SendMessageArgs(0, $"There's been a schedule change with the teachers: {string.Join(',', teacherUpdatedList)}"));
+        if (teacherUpdatedList.Count != 0)
+            _ = this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
+                $"There's been a schedule change with the teachers: {string.Join(',', teacherUpdatedList)}"));
         Timetable.Clear();
         Timetable.Add(new()
         {
