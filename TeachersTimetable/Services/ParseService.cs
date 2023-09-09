@@ -23,7 +23,7 @@ public class ParseService : IParseService
 {
     private readonly IMongoService _mongoService;
     private readonly IBotService _botService;
-    private readonly IFirefoxService _chromeService;
+    private readonly IFirefoxService _firefoxService;
     private readonly IDistributionService _distributionService;
 
     private const string WeekUrl =
@@ -141,12 +141,12 @@ public class ParseService : IParseService
     private static string LastDayHtmlContent { get; set; }
     private static string LastWeekHtmlContent { get; set; }
 
-    public ParseService(IMongoService mongoService, IBotService botService, IFirefoxService chromeService, 
+    public ParseService(IMongoService mongoService, IBotService botService, IFirefoxService firefoxService, 
         IDistributionService distributionService)
     {
         this._mongoService = mongoService;
         this._botService = botService;
-        this._chromeService = chromeService;
+        this._firefoxService = firefoxService;
         this._distributionService = distributionService;
 
         if (!Directory.Exists("./cachedImages")) Directory.CreateDirectory("./cachedImages");
@@ -174,7 +174,7 @@ public class ParseService : IParseService
         Console.WriteLine("Start day parse");
 
         var teacherInfos = new List<TeacherInfo>();
-        var (service, options, delay) = this._chromeService.Create();
+        var (service, options, delay) = this._firefoxService.Create();
         var day = string.Empty;
         using (FirefoxDriver driver = new FirefoxDriver(service, options, delay))
         {
@@ -245,7 +245,7 @@ public class ParseService : IParseService
         }
 
         var notificationUsersList = new List<User>();
-
+        var teacherUpdatedList = new List<string>();
         foreach (var teacherInfo in teacherInfos)
         {
             var count = 0;
@@ -276,7 +276,7 @@ public class ParseService : IParseService
                 Timetable.LastOrDefault()?.TeacherInfos.FirstOrDefault(t => t.Name == teacherInfo.Name);
             
             if (teacherInfoFromTimetable is null || teacherInfoFromTimetable.Equals(teacherInfo)) continue;
-            
+            teacherUpdatedList.Add(teacherInfo.Name);
             try
             {
                 _ = this._botService.SendAdminMessageAsync(
@@ -293,6 +293,7 @@ public class ParseService : IParseService
             }
         }
 
+        _ = this._botService.SendAdminMessageAsync(new SendMessageArgs(0, $"There's been a schedule change with the teachers: {string.Join(',', teacherUpdatedList)}"));
         Timetable.Clear();
         Timetable.Add(new()
         {
@@ -325,7 +326,7 @@ public class ParseService : IParseService
     {
         Console.WriteLine("Start week parse");
 
-        var (service, options, delay) = this._chromeService.Create();
+        var (service, options, delay) = this._firefoxService.Create();
         using (FirefoxDriver driver = new FirefoxDriver(service, options, delay))
         {
             driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
@@ -392,7 +393,7 @@ public class ParseService : IParseService
         {
             Console.WriteLine("Start update tick");
             bool parseDay = false, parseWeek = false;
-            var (service, options, delay) = this._chromeService.Create();
+            var (service, options, delay) = this._firefoxService.Create();
             using (FirefoxDriver driver = new FirefoxDriver(service, options, delay))
             {
                 //Day

@@ -6,7 +6,6 @@ public class TeacherInfo
     public string Date { get; set; }
     public List<Lesson> Lessons = new();
     
-    
     public override bool Equals(object? obj)
     {
         if (obj == null || this.GetType() != obj.GetType())
