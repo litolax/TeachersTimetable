@@ -279,12 +279,8 @@ public class ParseService : IParseService
             teacherUpdatedList.Add(teacherInfo.Name);
             try
             {
-                _ = this._botService.SendAdminMessageAsync(
-                    new SendMessageArgs(0, $"Расписание у группы {teacherInfo.Name}"));
-
                 var userList = (await this._mongoService.Database.GetCollection<User>("Users")
                     .FindAsync(u => u.Teacher != null && u.Notifications && u.Teacher == teacherInfo.Name)).ToList();
-
                 notificationUsersList.AddRange(userList);
             }
             catch (Exception e)
@@ -296,6 +292,7 @@ public class ParseService : IParseService
         if (teacherUpdatedList.Count != 0)
             _ = this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
                 $"There's been a schedule change with the teachers: {string.Join(',', teacherUpdatedList)}"));
+        teacherUpdatedList.Clear();
         Timetable.Clear();
         Timetable.Add(new()
         {
