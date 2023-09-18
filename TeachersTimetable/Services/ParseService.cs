@@ -4,8 +4,10 @@ using OpenQA.Selenium;
 using OpenQA.Selenium.Firefox;
 using OpenQA.Selenium.Interactions;
 using OpenQA.Selenium.Support.UI;
+using TeachersTimetable.Config;
 using TeachersTimetable.Models;
 using Telegram.BotAPI.AvailableMethods;
+using TelegramBot_Timetable_Core.Config;
 using TelegramBot_Timetable_Core.Services;
 using Size = System.Drawing.Size;
 using Timer = System.Timers.Timer;
@@ -14,7 +16,7 @@ namespace TeachersTimetable.Services;
 
 public interface IParseService
 {
-    List<string> Teachers { get; }
+    string[] Teachers { get; }
     static List<Timetable> Timetable { get; set; }
     Task UpdateTimetableTick();
 }
@@ -34,121 +36,19 @@ public class ParseService : IParseService
 
     private const int DriverTimeout = 2000;
 
-    public List<string> Teachers { get; } = new()
-    {
-        "Амброжи Н. М.",
-        "Ананич В. Д.",
-        "Анципов Е. Ю.",
-        "Астрейко Е. Ю.",
-        "Бабер А. И.",
-        "Барсукова Е. А.",
-        "Барсукова Н. В.",
-        "Белобровик А. А.",
-        "Берговина А. В.",
-        "Богдановская О. Н.",
-        "Босянок Г. Ф.",
-        "Бровка Д. С.",
-        "Будник Е. А.",
-        "Вайтович И. М.",
-        "Витебская Е. С.",
-        "Волошин В. В.",
-        "Воронько С. В.",
-        "Вострикова Т. С.",
-        "Гаврилович Д. И.",
-        "Галенко Е. Л.",
-        "Галицкий М. И.",
-        "Герасюк В. В.",
-        "Гриневич П. Р.",
-        "Громыко Н. К.",
-        "Дзевенская Р. И.",
-        "Дорц Н. А.",
-        "Дудко А. Р.",
-        "Жарский В. А.",
-        "Жартун А. С.",
-        "Жукова Т. Ю.",
-        "Зайковская М. И.",
-        "Звягина Д. Ч.",
-        "Зеленкевич Е. А.",
-        "Калацкая Т. Е.",
-        "Камлюк В. С.",
-        "Касперович С. А.",
-        "Киселёв В. Д.",
-        "Кислюк В. Е.",
-        "Козел А. А.",
-        "Козел Г. В.",
-        "Колинко Н. Г.",
-        "Кондратин И. Н.",
-        "Кохно Т. А.",
-        "Красовская А. В.",
-        "Кулецкая Ю. Н.",
-        "Кульбеда М. П.",
-        "Лебедкина Н. В.",
-        "Левонюк Е. А.",
-        "Леус Ж. В.",
-        "Липень А. В.",
-        "Лихачева О. П.",
-        "Лозовик И. В.",
-        "Магаревич Е. А.",
-        "Макаренко Е. В.",
-        "Мурашко А. В.",
-        "Немцева Н. А.",
-        "Оскерко В. С.",
-        "Паршаков Е. Д.",
-        "Перепелкин А. М.",
-        "Пешкова Г. Д.",
-        "Плаксин Е. Б.",
-        "Поклад Т. И.",
-        "Полуйко А. М.",
-        "Попеня Е. Э.",
-        "Потапчик И. Г.",
-        "Прокопович М. Е.",
-        "Протасеня А. О.",
-        "Пугач А. И.",
-        "Пуршнев А. В.",
-        "Русинская С. А.",
-        "Сабанов А. А.",
-        "Самарская Н. В.",
-        "Самохвал Н. Н.",
-        "Северин А. В.",
-        "Семенова Л. Н.",
-        "Сергун Т. С.",
-        "Скобля Я. Э.",
-        "Сотникова О. А.",
-        "Сушкевич Е. П.",
-        "Тарасевич А. В.",
-        "Тарасова Е. И.",
-        "Тихонович Н. В.",
-        "Усикова Л. Н.",
-        "Федкевич Д. А.",
-        "Фетисова Ю. Б.",
-        "Филипцова Е. В.",
-        "Харевская Е. Т.",
-        "Хомченко И. И.",
-        "Чертков М. Д.",
-        "Шавейко А. А.",
-        "Шеметов И. В.",
-        "Щербич Е. В.",
-        "Щуко О. И.",
-        "Потоцкий Д. С.",
-        "Петрович В. Л.",
-        "Петуховский М. С.",
-        "Песняк И. М.",
-        "Камельчук Ю. А.",
-        "Плескач О. В."
-    };
-
+    public string[] Teachers { get; init; }
     public static List<Timetable> Timetable { get; set; } = new();
     private static string LastDayHtmlContent { get; set; }
     private static string LastWeekHtmlContent { get; set; }
 
     public ParseService(IMongoService mongoService, IBotService botService, IFirefoxService firefoxService,
-        IDistributionService distributionService)
+        IDistributionService distributionService, IConfig<TeachersConfig> config)
     {
         this._mongoService = mongoService;
         this._botService = botService;
         this._firefoxService = firefoxService;
         this._distributionService = distributionService;
-
+        this.Teachers = config.Entries.Teachers;
         if (!Directory.Exists("./cachedImages")) Directory.CreateDirectory("./cachedImages");
 
         var parseTimer = new Timer(1_000_000)
@@ -156,7 +56,7 @@ public class ParseService : IParseService
             AutoReset = true, Enabled = true
         };
 
-        parseTimer.Elapsed += async (sender, args) =>
+        parseTimer.Elapsed += async (_, _) =>
         {
             try
             {
