@@ -42,13 +42,14 @@ public class ParseService : IParseService
     private static string LastWeekHtmlContent { get; set; }
 
     public ParseService(IMongoService mongoService, IBotService botService, IFirefoxService firefoxService,
-        IDistributionService distributionService, IConfig<TeachersConfig> config)
+        IDistributionService distributionService, IConfig<TeachersConfig> teachers)
     {
         this._mongoService = mongoService;
         this._botService = botService;
         this._firefoxService = firefoxService;
         this._distributionService = distributionService;
-        this.Teachers = config.Entries.Teachers;
+        this.Teachers = teachers.Entries.Teachers;
+        Console.WriteLine("Teachers: " + teachers.Entries.Teachers.Length);
         if (!Directory.Exists("./cachedImages")) Directory.CreateDirectory("./cachedImages");
 
         var parseTimer = new Timer(1_000_000)
