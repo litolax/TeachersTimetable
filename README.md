@@ -60,7 +60,7 @@ var jsonData = JsonSerializer.Serialize(new { Teachers = teacherArray });
 File.WriteAllText("Teachers.json", jsonData);
 Console.WriteLine("Data has been written to Teachers.json");
 ```
-"
+
 6. Install mongoDB.
    * [mongoDB](https://www.mongodb.com/try/download/community)
 7. Install geckodriver (for week screenshots).
@@ -85,5 +85,3 @@ Project Link: [https://github.com/litolax/TeachersTimetable](https://github.com/
 [issues-shield]: https://img.shields.io/github/issues/litolax/TeachersTimetable.svg?style=for-the-badge
 [issues-url]: https://github.com/litolax/TeachersTimetable/issues
 ```
-
-You can use this markdown in your GitHub repository's README file, and it will display information about your "TeachersTimetable" Telegram bot project in a similar format as the one you provided for "StudentsTimetable."
