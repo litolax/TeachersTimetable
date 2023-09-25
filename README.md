@@ -84,4 +84,3 @@ Project Link: [https://github.com/litolax/TeachersTimetable](https://github.com/
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
 [issues-shield]: https://img.shields.io/github/issues/litolax/TeachersTimetable.svg?style=for-the-badge
 [issues-url]: https://github.com/litolax/TeachersTimetable/issues
-```
