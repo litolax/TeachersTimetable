@@ -138,9 +138,9 @@ public class ParseService : IParseService
             }
             catch (Exception e)
             {
-                this._botService.SendAdminMessage(new SendMessageArgs(0, e.Message));
-                this._botService.SendAdminMessage(new SendMessageArgs(0,
-                    "Ошибка дневного расписания в учителе: " + teacher));
+                _ = this._botService.SendAdminMessageAsync(new SendMessageArgs(0, e.Message));
+                _ = this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
+                    "Ошибка дневного расписания у преподавателя: " + teacher));
             }
         }
 
@@ -159,7 +159,12 @@ public class ParseService : IParseService
             teacherInfo.Lessons.RemoveRange(0, count);
             teacherInfo.Lessons.Reverse();
 
-            if (teacherInfo.Lessons.Count < 1) continue;
+            if (teacherInfo.Lessons.Count < 1)
+            {
+                notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<User>("Users")
+                    .FindAsync(u => u.Teacher != null && u.Notifications && u.Teacher == teacherInfo.Name)).ToList());
+                continue;
+            }
 
             for (var i = 0; i < teacherInfo.Lessons.First().Index - 1; i++)
             {
@@ -179,9 +184,8 @@ public class ParseService : IParseService
             teacherUpdatedList.Add(teacherInfo.Name);
             try
             {
-                var userList = (await this._mongoService.Database.GetCollection<User>("Users")
-                    .FindAsync(u => u.Teacher != null && u.Notifications && u.Teacher == teacherInfo.Name)).ToList();
-                notificationUsersList.AddRange(userList);
+                notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<User>("Users")
+                    .FindAsync(u => u.Teacher != null && u.Notifications && u.Teacher == teacherInfo.Name)).ToList());
             }
             catch (Exception e)
             {
