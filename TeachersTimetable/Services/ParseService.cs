@@ -160,7 +160,10 @@ public class ParseService : IParseService
             teacherInfo.Lessons.RemoveRange(0, count);
             teacherInfo.Lessons.Reverse();
 
-            if (teacherInfo.Lessons.Count < 1)
+            var teacherInfoFromTimetable =
+                Timetable.LastOrDefault()?.TeacherInfos.FirstOrDefault(t => t.Name == teacherInfo.Name);
+            if (teacherInfo.Lessons.Count < 1 && teacherInfoFromTimetable is not null &&
+                teacherInfoFromTimetable.Lessons.Count > 0)
             {
                 notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<User>("Users")
                     .FindAsync(u => u.Teacher != null && u.Notifications && u.Teacher == teacherInfo.Name)).ToList());
@@ -178,8 +181,6 @@ public class ParseService : IParseService
             }
 
             teacherInfo.Lessons = teacherInfo.Lessons.OrderBy(l => l.Index).ToList();
-            var teacherInfoFromTimetable =
-                Timetable.LastOrDefault()?.TeacherInfos.FirstOrDefault(t => t.Name == teacherInfo.Name);
 
             if (teacherInfoFromTimetable is null || teacherInfoFromTimetable.Equals(teacherInfo)) continue;
             teacherUpdatedList.Add(teacherInfo.Name);
