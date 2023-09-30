@@ -1,5 +1,4 @@
-﻿using System.Text.RegularExpressions;
-using MongoDB.Driver;
+﻿using MongoDB.Driver;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Firefox;
 using OpenQA.Selenium.Interactions;
@@ -162,11 +161,12 @@ public class ParseService : IParseService
 
             var teacherInfoFromTimetable =
                 Timetable.LastOrDefault()?.TeacherInfos.FirstOrDefault(t => t.Name == teacherInfo.Name);
-            if (teacherInfo.Lessons.Count < 1 && teacherInfoFromTimetable?.Lessons is not null &&
-                teacherInfoFromTimetable.Lessons.Count > 0)
+            if (teacherInfo.Lessons.Count < 1)
             {
-                notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<User>("Users")
-                    .FindAsync(u => u.Teacher != null && u.Notifications && u.Teacher == teacherInfo.Name)).ToList());
+                if (teacherInfoFromTimetable?.Lessons is not null && teacherInfoFromTimetable.Lessons.Count > 0)
+                    notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<User>("Users")
+                            .FindAsync(u => u.Teacher != null && u.Notifications && u.Teacher == teacherInfo.Name))
+                        .ToList());
                 continue;
             }
 
