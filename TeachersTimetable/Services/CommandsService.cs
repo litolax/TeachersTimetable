@@ -1,4 +1,5 @@
-﻿using Telegram.BotAPI.AvailableMethods;
+﻿using MongoDB.Driver;
+using Telegram.BotAPI.AvailableMethods;
 using Telegram.BotAPI.AvailableTypes;
 using TelegramBot_Timetable_Core;
 using TelegramBot_Timetable_Core.Models;
@@ -120,8 +121,26 @@ namespace TeachersTimetable.Services
                 {
                     var lowerMessageText = messageText.ToLower();
                     
-                    // if (lowerMessageText.Contains("/notify"))
-                    //     await this._parserService.SendNewDayTimetables(null, true);
+                    if (lowerMessageText.Contains("/timetablenotify"))
+                    {
+                        var notificationUsers = new List<Models.User>();
+                        notificationUsers.AddRange(
+                            (await this._mongoService.Database.GetCollection<Models.User>("Users")
+                                .FindAsync(u => u.Teacher != null && u.Notifications)).ToList());
+
+                        if (notificationUsers.Count == 0) return;
+
+                        _ = Task.Run(() =>
+                        {
+                            foreach (var user in notificationUsers)
+                            {
+                                _ = this._distributionService.SendDayTimetable(user);
+                            }
+
+                            this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
+                                $"{notificationUsers.Count} notifications sent"));
+                        });
+                    }
                 }
                 
                 await this._interfaceService.NotifyAllUsers(message);
