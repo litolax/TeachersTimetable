@@ -26,6 +26,8 @@ public class ParseService : IParseService
     private readonly IBotService _botService;
     private readonly IFirefoxService _firefoxService;
     private readonly IDistributionService _distributionService;
+    private DateTime?[]? _weekInterval;
+    private List<string> _thHeaders;
 
     private const string WeekUrl =
         "https://mgkct.minskedu.gov.by/персоналии/преподавателям/расписание-занятий-на-неделю";
@@ -92,7 +94,25 @@ public class ParseService : IParseService
             var teacher = string.Empty;
             try
             {
-                if (teachersAndLessons.Count > 0) day = teachersAndLessons[0].Text.Split('-')[1].Trim();
+                if (teachersAndLessons.Count > 0)
+                {
+                    day = teachersAndLessons[0].Text.Split('-')[1].Trim();
+                    var tempDay =
+                        _thHeaders.FirstOrDefault(th =>
+                            th.Contains(day, StringComparison.InvariantCultureIgnoreCase)) ??
+                        day;
+                    var daytime = Utils.ParseDateTime(tempDay.Split(", ")[1].Trim());
+                    if (daytime?.DayOfWeek is DayOfWeek.Saturday && !Utils.IsDateBelongsToInterval(daytime, _weekInterval))
+                    {
+                        Console.WriteLine("End parse day(next saturday)");
+                        await this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
+                            "Detected next Saturday!" + tempDay));
+                        return;
+                    }
+
+                    day = tempDay;
+                }
+
                 for (var i = 1; i < teachersAndLessons.Count; i += 2)
                 {
                     var parsedTeacherName = teachersAndLessons[i - 1].Text.Split('-')[0].Trim();
@@ -218,7 +238,7 @@ public class ParseService : IParseService
                 }
 
                 this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
-                    $"{notificationUsersList.Count} notifications sent"));
+                    $"{day}:{notificationUsersList.Count} notifications sent"));
             }
             catch (Exception e)
             {
@@ -251,6 +271,25 @@ public class ParseService : IParseService
             var h3 =
                 driver.FindElements(
                     By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/h3"));
+            var weekIntervalStr = h3[0].Text;
+            var weekInterval = Utils.ParseDateTimeWeekInterval(weekIntervalStr);
+            if (_weekInterval is null || !string.IsNullOrEmpty(weekIntervalStr) && _weekInterval != weekInterval &&
+                _weekInterval[1] is not null && DateTime.Today == _weekInterval[1])
+            {
+                _weekInterval = weekInterval;
+                Console.WriteLine("New interval is " + weekIntervalStr);
+                await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "New interval is " + weekIntervalStr));
+                var tempThHeaders =
+                    driver.FindElement(
+                            By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div[1]/table/tbody/tr[1]"))
+                        .FindElements(By.TagName("th"));
+                _thHeaders = new List<string>();
+                foreach (var thHeader in tempThHeaders)
+                {
+                    _thHeaders.Add(new string(thHeader.Text));
+                }
+            }
+
             var table = driver.FindElements(By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div"));
             Utils.HideTeacherElements(driver, h3);
             Utils.HideTeacherElements(driver, h2);
