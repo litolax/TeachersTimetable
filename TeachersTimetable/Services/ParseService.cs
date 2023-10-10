@@ -147,7 +147,7 @@ public class ParseService : IParseService
                         {
                             Index = int.Parse(lessonNumbers[j].Text.Replace("№", "")),
                             Cabinet = cabinet,
-                            Group = lessonNames[j].Text
+                            Group = lessonNames[j].Text.Replace("*",string.Empty)
                         });
                     }
 
@@ -204,7 +204,7 @@ public class ParseService : IParseService
 
             if (teacherInfoFromTimetable is null || teacherInfoFromTimetable.Equals(teacherInfo)) continue;
             teacherUpdatedList.Add(teacherInfo.Name);
-            try
+            try 
             {
                 notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<User>("Users")
                     .FindAsync(u => u.Teacher != null && u.Notifications && u.Teacher == teacherInfo.Name)).ToList());
