@@ -102,7 +102,8 @@ public class ParseService : IParseService
                             th.Contains(day, StringComparison.InvariantCultureIgnoreCase)) ??
                         day;
                     var daytime = Utils.ParseDateTime(tempDay.Split(", ")[1].Trim());
-                    if (daytime?.DayOfWeek is DayOfWeek.Saturday && !Utils.IsDateBelongsToInterval(daytime, _weekInterval))
+                    if (daytime?.DayOfWeek is DayOfWeek.Saturday &&
+                        !Utils.IsDateBelongsToInterval(daytime, _weekInterval))
                     {
                         Console.WriteLine("End parse day(next saturday)");
                         await this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
@@ -278,16 +279,18 @@ public class ParseService : IParseService
             {
                 _weekInterval = weekInterval;
                 Console.WriteLine("New interval is " + weekIntervalStr);
-                await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "New interval is " + weekIntervalStr));
-                var tempThHeaders =
-                    driver.FindElement(
-                            By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div[1]/table/tbody/tr[1]"))
-                        .FindElements(By.TagName("th"));
-                _thHeaders = new List<string>();
-                foreach (var thHeader in tempThHeaders)
-                {
-                    _thHeaders.Add(new string(thHeader.Text));
-                }
+                await this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
+                    "New interval is " + weekIntervalStr));
+            }
+
+            var tempThHeaders =
+                driver.FindElement(
+                        By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div[1]/table/tbody/tr[1]"))
+                    .FindElements(By.TagName("th"));
+            _thHeaders = new List<string>();
+            foreach (var thHeader in tempThHeaders)
+            {
+                _thHeaders.Add(new string(thHeader.Text));
             }
 
             var table = driver.FindElements(By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div"));
