@@ -44,13 +44,20 @@ namespace TeachersTimetable.Services
         public async Task<bool> ChangeTeacher(User telegramUser, string? teacherName)
         {
             if (teacherName is null) return false;
-
-            var correctTeacherName = this._parseService.Teachers.FirstOrDefault(
-                teacher => teacher.ToLower().Trim().Contains(teacherName.ToLower().Trim()));
-            
-            if (correctTeacherName is not {})
+            var teacherNames = teacherName.Split(',', ';', StringSplitOptions.RemoveEmptyEntries);
+            teacherNames = teacherNames.Length > 3 ? teacherNames[..3] : teacherNames;
+            for (var i = 0; i < teacherNames.Length; i++)
             {
-                await this._botService.SendMessageAsync(new SendMessageArgs(telegramUser.Id, "Преподаватель не найден"));
+                teacherNames[i] = teacherNames[i].Trim();
+            }
+
+            var correctTeacherNames = this._parseService.Teachers.Where(g => teacherNames.Any(teacher =>
+                g.ToLower().Trim().Contains(teacher.ToLower().Trim()))).ToArray();
+
+            if (correctTeacherNames is null || correctTeacherNames.Length == 0)
+            {
+                await this._botService.SendMessageAsync(new SendMessageArgs(telegramUser.Id,
+                    $"Преподовател{(teacherNames.Length == 0 ? 'ь' : 'и')} не найден{(teacherNames.Length == 0 ? string.Empty : "ы")}"));
                 return false;
             }
 
@@ -58,12 +65,14 @@ namespace TeachersTimetable.Services
             var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First() ??
                        await this.CreateAccount(telegramUser);
 
-            user!.Teacher = correctTeacherName;
-            var update = Builders<Models.User>.Update.Set(u => u.Teacher, user.Teacher);
+            user!.Teachers = correctTeacherNames;
+            var update = Builders<Models.User>.Update.Set(u => u.Teachers, user.Teachers);
             await userCollection.UpdateOneAsync(u => u.UserId == telegramUser.Id, update);
 
-            await this._botService.SendMessageAsync(new SendMessageArgs(telegramUser.Id,
-                $"Вы успешно подписались на расписание преподавателя {correctTeacherName}"));
+            await this._botService.SendMessageAsync(new SendMessageArgs(telegramUser.Id, correctTeacherNames.Length == 1
+                ? $"Вы успешно подписались на расписание преподавателя {correctTeacherNames[0]}"
+                : $"Вы успешно подписались на расписание преподавателей: {string.Join(", ", correctTeacherNames)}"
+            ));
 
             return true;
         }
@@ -75,8 +84,8 @@ namespace TeachersTimetable.Services
                        await this.CreateAccount(telegramUser);
 
             if (user is null) return;
-            
-            if (user.Teacher is null)
+
+            if (user.Teachers is null)
             {
                 this._botService.SendMessage(new SendMessageArgs(telegramUser.Id,
                     $"Перед оформлением подписки на рассылку необходимо выбрать преподавателя"));
@@ -105,16 +114,19 @@ namespace TeachersTimetable.Services
                     },
                     new[]
                     {
-                        user.Notifications ? new KeyboardButton("Отписаться от рассылки") : new KeyboardButton("Подписаться на рассылку")
+                        user.Notifications
+                            ? new KeyboardButton("Отписаться от рассылки")
+                            : new KeyboardButton("Подписаться на рассылку")
                     }
                 },
                 ResizeKeyboard = true,
                 InputFieldPlaceholder = "Выберите действие"
             };
 
-            this._botService.SendMessage(new SendMessageArgs(telegramUser.Id, user.Notifications ? 
-                $"Вы успешно подписались на расписание преподавателя {user.Teacher}" :
-                $"Вы успешно отменили подписку на расписание преподавателя {user.Teacher}")
+            this._botService.SendMessage(new SendMessageArgs(telegramUser.Id,
+                user.Notifications
+                    ? $"Вы успешно подписались на расписание преподавателя {user.Teachers}"
+                    : $"Вы успешно отменили подписку на расписание преподавателя {user.Teachers}")
             {
                 ReplyMarkup = keyboard
             });
