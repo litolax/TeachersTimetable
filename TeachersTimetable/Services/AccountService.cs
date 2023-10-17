@@ -19,6 +19,7 @@ namespace TeachersTimetable.Services
         private readonly IMongoService _mongoService;
         private readonly IParseService _parseService;
         private readonly IBotService _botService;
+        private const int MaxTeachersCount = 5;
 
         public AccountService(IMongoService mongoService, IParseService parseService, IBotService botService)
         {
@@ -45,7 +46,7 @@ namespace TeachersTimetable.Services
         {
             if (teacherName is null) return false;
             var teacherNames = teacherName.Split(',', ';', StringSplitOptions.RemoveEmptyEntries);
-            teacherNames = teacherNames.Length > 5 ? teacherNames[..5] : teacherNames;
+            teacherNames = teacherNames.Length > MaxTeachersCount ? teacherNames[..MaxTeachersCount] : teacherNames;
             for (var i = 0; i < teacherNames.Length; i++)
             {
                 teacherNames[i] = teacherNames[i].Trim();
