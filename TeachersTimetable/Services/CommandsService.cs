@@ -99,7 +99,7 @@ namespace TeachersTimetable.Services
                 case "Сменить преподавателя":
                 {
                     this._botService.SendMessage(new SendMessageArgs(sender.Id,
-                        $"Для оформления подписки на преподавателя отправьте его фамилию."));
+                        $"Для оформления подписки на преподавателей отправьте их фамилии.(Максимум - 5)"));
 
                     this._mongoService.CreateState(new UserState(message.Chat.Id, "changeTeacher"));
 
@@ -138,7 +138,7 @@ namespace TeachersTimetable.Services
                             }
 
                             this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
-                                $"{notificationUsers.Count} notifications sent"));
+                                $"After timetablenotify:{notificationUsers.Count} notifications sent"));
                         });
                     }
                 }

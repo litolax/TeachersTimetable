@@ -45,7 +45,7 @@ namespace TeachersTimetable.Services
         {
             if (teacherName is null) return false;
             var teacherNames = teacherName.Split(',', ';', StringSplitOptions.RemoveEmptyEntries);
-            teacherNames = teacherNames.Length > 3 ? teacherNames[..3] : teacherNames;
+            teacherNames = teacherNames.Length > 5 ? teacherNames[..5] : teacherNames;
             for (var i = 0; i < teacherNames.Length; i++)
             {
                 teacherNames[i] = teacherNames[i].Trim();
@@ -57,7 +57,7 @@ namespace TeachersTimetable.Services
             if (correctTeacherNames is null || correctTeacherNames.Length == 0)
             {
                 await this._botService.SendMessageAsync(new SendMessageArgs(telegramUser.Id,
-                    $"Преподовател{(teacherNames.Length == 0 ? 'ь' : 'и')} не найден{(teacherNames.Length == 0 ? string.Empty : "ы")}"));
+                    $"Преподовател{(teacherNames.Length == 0 ? 'ь' : 'и')} {Utils.GetTeachersString(teacherNames)} не найден{(teacherNames.Length == 0 ? string.Empty : "ы")}"));
                 return false;
             }
 
@@ -71,7 +71,7 @@ namespace TeachersTimetable.Services
 
             await this._botService.SendMessageAsync(new SendMessageArgs(telegramUser.Id, correctTeacherNames.Length == 1
                 ? $"Вы успешно подписались на расписание преподавателя {correctTeacherNames[0]}"
-                : $"Вы успешно подписались на расписание преподавателей: {string.Join(", ", correctTeacherNames)}"
+                : $"Вы успешно подписались на расписание преподавателей: {Utils.GetTeachersString(correctTeacherNames)}"
             ));
 
             return true;
@@ -88,7 +88,7 @@ namespace TeachersTimetable.Services
             if (user.Teachers is null)
             {
                 this._botService.SendMessage(new SendMessageArgs(telegramUser.Id,
-                    $"Перед оформлением подписки на рассылку необходимо выбрать преподавателя"));
+                    $"Перед оформлением подписки на рассылку необходимо выбрать преподавателя   "));
                 return;
             }
 
