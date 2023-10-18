@@ -31,10 +31,8 @@ namespace TeachersTimetable.Services
         public async Task<Models.User?> CreateAccount(User telegramUser)
         {
             var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
-
             var users = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList();
             if (users.Count >= 1) return null;
-
             var user = new Models.User(telegramUser.Id, telegramUser.Username, telegramUser.FirstName,
                 telegramUser.LastName) { Id = ObjectId.GenerateNewId() };
 

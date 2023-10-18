@@ -99,7 +99,7 @@ namespace TeachersTimetable.Services
                 case "Сменить преподавателя":
                 {
                     this._botService.SendMessage(new SendMessageArgs(sender.Id,
-                        $"Для оформления подписки на преподавателей отправьте их фамилии.(Максимум - 5)"));
+                        $"Для оформления подписки на преподавателей отправьте их фамилии.(Максимум - 5. Пример: Кулецкая, Шавейко, Потоцкий, Левонюк, Протасеня )"));
 
                     this._mongoService.CreateState(new UserState(message.Chat.Id, "changeTeacher"));
 
