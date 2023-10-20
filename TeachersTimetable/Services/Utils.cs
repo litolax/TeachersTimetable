@@ -100,4 +100,6 @@ public static class Utils
                 DateTimeStyles.None, out var dayTime)) return dayTime;
         return null;
     }
+    
+    public static string GetTeachersString(string[] teachers) => string.Join(", ", teachers);
 }

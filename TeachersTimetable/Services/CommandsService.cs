@@ -99,7 +99,7 @@ namespace TeachersTimetable.Services
                 case "Сменить преподавателя":
                 {
                     this._botService.SendMessage(new SendMessageArgs(sender.Id,
-                        $"Для оформления подписки на преподавателя отправьте его фамилию."));
+                        $"Для оформления подписки на преподавателей отправьте их фамилии.(Максимум - 5. Пример: Кулецкая, Шавейко, Потоцкий, Левонюк, Протасеня )"));
 
                     this._mongoService.CreateState(new UserState(message.Chat.Id, "changeTeacher"));
 
@@ -126,7 +126,7 @@ namespace TeachersTimetable.Services
                         var notificationUsers = new List<Models.User>();
                         notificationUsers.AddRange(
                             (await this._mongoService.Database.GetCollection<Models.User>("Users")
-                                .FindAsync(u => u.Teacher != null && u.Notifications)).ToList());
+                                .FindAsync(u => u.Teachers != null && u.Notifications)).ToList());
 
                         if (notificationUsers.Count == 0) return;
 
@@ -138,7 +138,7 @@ namespace TeachersTimetable.Services
                             }
 
                             this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
-                                $"{notificationUsers.Count} notifications sent"));
+                                $"After timetablenotify:{notificationUsers.Count} notifications sent"));
                         });
                     }
                 }

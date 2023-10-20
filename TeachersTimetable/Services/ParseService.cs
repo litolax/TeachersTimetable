@@ -122,7 +122,6 @@ public class ParseService : IParseService
 
                     var teacherInfo = new TeacherInfo();
                     var lessons = new List<Lesson>();
-
                     var lessonsElements =
                         teachersAndLessons[i].FindElements(By.XPath(".//table/tbody/tr")).ToList();
 
@@ -148,7 +147,7 @@ public class ParseService : IParseService
                         {
                             Index = int.Parse(lessonNumbers[j].Text.Replace("№", "")),
                             Cabinet = cabinet,
-                            Group = lessonNames[j].Text.Replace("*",string.Empty)
+                            Group = lessonNames[j].Text.Replace("*", string.Empty)
                         });
                     }
 
@@ -186,7 +185,8 @@ public class ParseService : IParseService
             {
                 if (teacherInfoFromTimetable?.Lessons is not null && teacherInfoFromTimetable.Lessons.Count > 0)
                     notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<User>("Users")
-                            .FindAsync(u => u.Teacher != null && u.Notifications && u.Teacher == teacherInfo.Name))
+                            .FindAsync(u =>
+                                u.Teachers != null && u.Notifications && u.Teachers.Contains(teacherInfo.Name)))
                         .ToList());
                 continue;
             }
@@ -205,10 +205,11 @@ public class ParseService : IParseService
 
             if (teacherInfoFromTimetable is null || teacherInfoFromTimetable.Equals(teacherInfo)) continue;
             teacherUpdatedList.Add(teacherInfo.Name);
-            try 
+            try
             {
                 notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<User>("Users")
-                    .FindAsync(u => u.Teacher != null && u.Notifications && u.Teacher == teacherInfo.Name)).ToList());
+                        .FindAsync(u => u.Teachers != null && u.Notifications && u.Teachers.Contains(teacherInfo.Name)))
+                    .ToList());
             }
             catch (Exception e)
             {

@@ -9,7 +9,7 @@ namespace TeachersTimetable.Models
         public string? Username { get; set; }
         public string? FirstName { get; set; }
         public string? LastName { get; set; }
-        public string? Teacher { get; set; }
+        public string?[]? Teachers { get; set; }
         public bool Notifications { get; set; }
 
         public User(long userId, string? username, string? firstName, string? lastName)
