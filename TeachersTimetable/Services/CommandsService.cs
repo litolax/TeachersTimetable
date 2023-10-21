@@ -1,7 +1,9 @@
 ﻿using MongoDB.Driver;
+using TeachersTimetable.Config;
 using Telegram.BotAPI.AvailableMethods;
 using Telegram.BotAPI.AvailableTypes;
 using TelegramBot_Timetable_Core;
+using TelegramBot_Timetable_Core.Config;
 using TelegramBot_Timetable_Core.Models;
 using TelegramBot_Timetable_Core.Services;
 
@@ -19,6 +21,7 @@ namespace TeachersTimetable.Services
         private readonly IMongoService _mongoService;
         private readonly IBotService _botService;
         private readonly IDistributionService _distributionService;
+        private static string _teachersList; 
 
         public CommandsService(IInterfaceService interfaceService, IAccountService accountService, IMongoService mongoService, 
             IBotService botService, IDistributionService distributionService)
@@ -30,6 +33,7 @@ namespace TeachersTimetable.Services
             this._mongoService = mongoService;
             this._botService = botService;
             this._distributionService = distributionService;
+            _teachersList = string.Join('\n', new Config<TeachersConfig>().Entries.Teachers);
         }
 
         private async void OnMessageReceive(Message message)
@@ -58,6 +62,11 @@ namespace TeachersTimetable.Services
                 {
                     this._botService.SendMessage(new SendMessageArgs(sender.Id,
                         $"Вы пользуетесь ботом, который поможет узнать Вам актуальное расписание преподавателей МГКЦТ.\nСоздатель @litolax"));
+                    break;
+                }
+                case "/teachers":
+                {
+                    this._botService.SendMessage(new SendMessageArgs(sender.Id, _teachersList));
                     break;
                 }
                 case "/belltime":
