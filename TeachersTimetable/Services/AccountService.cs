@@ -12,6 +12,7 @@ namespace TeachersTimetable.Services
         Task<Models.User?> CreateAccount(User telegramUser);
         Task<bool> ChangeTeacher(User telegramUser, string? teacher);
         Task UpdateNotificationsStatus(User telegramUser);
+        Task<Models.User?> GetUserById(long id);
     }
 
     public class AccountService : IAccountService
@@ -38,6 +39,12 @@ namespace TeachersTimetable.Services
 
             await userCollection.InsertOneAsync(user);
             return user;
+        }
+
+        public async Task<Models.User?> GetUserById(long id)
+        {
+            var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
+            return (await userCollection.FindAsync(u => u.UserId == id)).FirstOrDefault();
         }
 
         public async Task<bool> ChangeTeacher(User telegramUser, string? teacherName)
