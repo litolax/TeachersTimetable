@@ -164,7 +164,7 @@ public class ParseService : IParseService
             }
         }
 
-        var notificationUsersList = new List<User>();
+        var notificationUsersHashSet = new HashSet<User>();
         var teacherUpdatedList = new List<string>();
         foreach (var teacherInfo in teacherInfos)
         {
@@ -184,10 +184,11 @@ public class ParseService : IParseService
             if (teacherInfo.Lessons.Count < 1)
             {
                 if (teacherInfoFromTimetable?.Lessons is not null && teacherInfoFromTimetable.Lessons.Count > 0)
-                    notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<User>("Users")
-                            .FindAsync(u =>
-                                u.Teachers != null && u.Notifications && u.Teachers.Contains(teacherInfo.Name)))
-                        .ToList());
+                    foreach (var notificationUser in (await this._mongoService.Database.GetCollection<User>("Users")
+                                 .FindAsync(u =>
+                                     u.Teachers != null && u.Notifications && u.Teachers.Contains(teacherInfo.Name)))
+                             .ToList())
+                        notificationUsersHashSet.Add(notificationUser);
                 continue;
             }
 
@@ -207,9 +208,10 @@ public class ParseService : IParseService
             teacherUpdatedList.Add(teacherInfo.Name);
             try
             {
-                notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<User>("Users")
-                        .FindAsync(u => u.Teachers != null && u.Notifications && u.Teachers.Contains(teacherInfo.Name)))
-                    .ToList());
+                foreach (var notificationUser in (await this._mongoService.Database.GetCollection<User>("Users")
+                             .FindAsync(u =>
+                                 u.Teachers != null && u.Notifications && u.Teachers.Contains(teacherInfo.Name)))
+                         .ToList()) notificationUsersHashSet.Add(notificationUser);
             }
             catch (Exception e)
             {
@@ -229,18 +231,18 @@ public class ParseService : IParseService
         });
         teacherInfos.Clear();
         Console.WriteLine("End parse day");
-        if (notificationUsersList.Count == 0) return;
+        if (notificationUsersHashSet.Count == 0) return;
         _ = Task.Run(() =>
         {
             try
             {
-                foreach (var user in notificationUsersList)
+                foreach (var user in notificationUsersHashSet)
                 {
                     _ = this._distributionService.SendDayTimetable(user);
                 }
 
                 this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
-                    $"{day}:{notificationUsersList.Count} notifications sent"));
+                    $"{day}:{notificationUsersHashSet.Count} notifications sent"));
             }
             catch (Exception e)
             {
