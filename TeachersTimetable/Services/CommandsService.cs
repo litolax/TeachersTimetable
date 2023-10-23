@@ -110,7 +110,7 @@ namespace TeachersTimetable.Services
                 case "Сменить преподавателя":
                 {
                     this._botService.SendMessage(new SendMessageArgs(sender.Id,
-                        $"Для оформления подписки на преподавателей отправьте их фамилии.(Максимум - 5. Пример: Кулецкая, Шавейко, Потоцкий, Левонюк, Протасеня)\nВаши выбранные преподаватели: ```{string.Join(", ", (await this._accountService.GetUserById(sender.Id))?.Teachers ?? Array.Empty<string>())}```")
+                        $"Для оформления подписки на преподавателей отправьте их фамилии.(Максимум - 5. Пример: Кулецкая, Шавейко, Потоцкий, Левонюк, Протасеня)\nВаши выбранные преподаватели: ```\n{Utils.GetTeachersString((await this._accountService.GetUserById(sender.Id))?.Teachers ?? Array.Empty<string>())}\n```")
                     {
                         ParseMode = ParseMode.Markdown
                     });

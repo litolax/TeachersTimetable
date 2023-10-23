@@ -57,8 +57,9 @@ namespace TeachersTimetable.Services
                 teacherNames[i] = teacherNames[i].Trim();
             }
 
-            var correctTeacherNames = this._parseService.Teachers.Where(g => teacherNames.Any(teacher =>
-                g.ToLower().Trim().Contains(teacher.ToLower().Trim()))).ToArray();
+            var correctTeacherNames = teacherNames
+                .Select(t => this._parseService.Teachers.FirstOrDefault(teacher =>
+                    teacher.StartsWith(t, StringComparison.InvariantCultureIgnoreCase))).Where(correctTeacher => correctTeacher is not null).ToArray();
 
             if (correctTeacherNames is null || correctTeacherNames.Length == 0)
             {
@@ -131,8 +132,10 @@ namespace TeachersTimetable.Services
 
             this._botService.SendMessage(new SendMessageArgs(telegramUser.Id,
                 user.Notifications
-                    ? $"Вы успешно подписались на расписание преподавателя {user.Teachers}"
-                    : $"Вы успешно отменили подписку на расписание преподавателя {user.Teachers}")
+                    ? user.Teachers.Length == 1
+                        ? $"Вы успешно подписались на расписание преподавателя {user.Teachers[0]}"
+                        : $"Вы успешно подписались на расписание преподавателей: {Utils.GetTeachersString(user.Teachers)}"
+                    : "Вы успешно отменили подписку")
             {
                 ReplyMarkup = keyboard
             });

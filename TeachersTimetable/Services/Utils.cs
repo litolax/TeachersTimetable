@@ -101,5 +101,5 @@ public static class Utils
         return null;
     }
     
-    public static string GetTeachersString(string[] teachers) => string.Join(", ", teachers);
+    public static string GetTeachersString(string?[] teachers) => string.Join(", ", teachers);
 }
