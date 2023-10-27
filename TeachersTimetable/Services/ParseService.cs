@@ -26,6 +26,8 @@ public class ParseService : IParseService
     private readonly IBotService _botService;
     private readonly IFirefoxService _firefoxService;
     private readonly IDistributionService _distributionService;
+    private DateTime?[]? _weekInterval;
+    private List<string> _thHeaders;
 
     private const string WeekUrl =
         "https://mgkct.minskedu.gov.by/персоналии/преподавателям/расписание-занятий-на-неделю";
@@ -92,7 +94,26 @@ public class ParseService : IParseService
             var teacher = string.Empty;
             try
             {
-                if (teachersAndLessons.Count > 0) day = teachersAndLessons[0].Text.Split('-')[1].Trim();
+                if (teachersAndLessons.Count > 0)
+                {
+                    day = teachersAndLessons[0].Text.Split('-')[1].Trim();
+                    var tempDay =
+                        _thHeaders.FirstOrDefault(th =>
+                            th.Contains(day, StringComparison.InvariantCultureIgnoreCase)) ??
+                        day;
+                    var daytime = Utils.ParseDateTime(tempDay.Split(", ")[1].Trim());
+                    if (daytime?.DayOfWeek is DayOfWeek.Saturday &&
+                        !Utils.IsDateBelongsToInterval(daytime, _weekInterval))
+                    {
+                        Console.WriteLine("End parse day(next saturday)");
+                        await this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
+                            "Detected next Saturday!" + tempDay));
+                        return;
+                    }
+
+                    day = tempDay;
+                }
+
                 for (var i = 1; i < teachersAndLessons.Count; i += 2)
                 {
                     var parsedTeacherName = teachersAndLessons[i - 1].Text.Split('-')[0].Trim();
@@ -101,7 +122,6 @@ public class ParseService : IParseService
 
                     var teacherInfo = new TeacherInfo();
                     var lessons = new List<Lesson>();
-
                     var lessonsElements =
                         teachersAndLessons[i].FindElements(By.XPath(".//table/tbody/tr")).ToList();
 
@@ -127,7 +147,7 @@ public class ParseService : IParseService
                         {
                             Index = int.Parse(lessonNumbers[j].Text.Replace("№", "")),
                             Cabinet = cabinet,
-                            Group = lessonNames[j].Text
+                            Group = lessonNames[j].Text.Replace("*", string.Empty)
                         });
                     }
 
@@ -144,7 +164,7 @@ public class ParseService : IParseService
             }
         }
 
-        var notificationUsersList = new List<User>();
+        var notificationUsersHashSet = new HashSet<User>();
         var teacherUpdatedList = new List<string>();
         foreach (var teacherInfo in teacherInfos)
         {
@@ -164,9 +184,11 @@ public class ParseService : IParseService
             if (teacherInfo.Lessons.Count < 1)
             {
                 if (teacherInfoFromTimetable?.Lessons is not null && teacherInfoFromTimetable.Lessons.Count > 0)
-                    notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<User>("Users")
-                            .FindAsync(u => u.Teacher != null && u.Notifications && u.Teacher == teacherInfo.Name))
-                        .ToList());
+                    foreach (var notificationUser in (await this._mongoService.Database.GetCollection<User>("Users")
+                                 .FindAsync(u =>
+                                     u.Teachers != null && u.Notifications && u.Teachers.Contains(teacherInfo.Name)))
+                             .ToList())
+                        notificationUsersHashSet.Add(notificationUser);
                 continue;
             }
 
@@ -186,8 +208,10 @@ public class ParseService : IParseService
             teacherUpdatedList.Add(teacherInfo.Name);
             try
             {
-                notificationUsersList.AddRange((await this._mongoService.Database.GetCollection<User>("Users")
-                    .FindAsync(u => u.Teacher != null && u.Notifications && u.Teacher == teacherInfo.Name)).ToList());
+                foreach (var notificationUser in (await this._mongoService.Database.GetCollection<User>("Users")
+                             .FindAsync(u =>
+                                 u.Teachers != null && u.Notifications && u.Teachers.Contains(teacherInfo.Name)))
+                         .ToList()) notificationUsersHashSet.Add(notificationUser);
             }
             catch (Exception e)
             {
@@ -207,18 +231,18 @@ public class ParseService : IParseService
         });
         teacherInfos.Clear();
         Console.WriteLine("End parse day");
-        if (notificationUsersList.Count == 0) return;
+        if (notificationUsersHashSet.Count == 0) return;
         _ = Task.Run(() =>
         {
             try
             {
-                foreach (var user in notificationUsersList)
+                foreach (var user in notificationUsersHashSet)
                 {
                     _ = this._distributionService.SendDayTimetable(user);
                 }
 
                 this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
-                    $"{notificationUsersList.Count} notifications sent"));
+                    $"{day}:{notificationUsersHashSet.Count} notifications sent"));
             }
             catch (Exception e)
             {
@@ -251,6 +275,27 @@ public class ParseService : IParseService
             var h3 =
                 driver.FindElements(
                     By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/h3"));
+            var weekIntervalStr = h3[0].Text;
+            var weekInterval = Utils.ParseDateTimeWeekInterval(weekIntervalStr);
+            if (_weekInterval is null || !string.IsNullOrEmpty(weekIntervalStr) && _weekInterval != weekInterval &&
+                _weekInterval[1] is not null && DateTime.Today == _weekInterval[1])
+            {
+                _weekInterval = weekInterval;
+                Console.WriteLine("New interval is " + weekIntervalStr);
+                await this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
+                    "New interval is " + weekIntervalStr));
+            }
+
+            var tempThHeaders =
+                driver.FindElement(
+                        By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div[1]/table/tbody/tr[1]"))
+                    .FindElements(By.TagName("th"));
+            _thHeaders = new List<string>();
+            foreach (var thHeader in tempThHeaders)
+            {
+                _thHeaders.Add(new string(thHeader.Text));
+            }
+
             var table = driver.FindElements(By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div"));
             Utils.HideTeacherElements(driver, h3);
             Utils.HideTeacherElements(driver, h2);

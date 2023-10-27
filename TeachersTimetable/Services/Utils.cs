@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Globalization;
+using System.Text.RegularExpressions;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Firefox;
 using TeachersTimetable.Models;
@@ -75,4 +76,30 @@ public static class Utils
             driver.ExecuteScript("arguments[0].style='display: block;'", element);
         }
     }
+
+    public static DateTime?[]? ParseDateTimeWeekInterval(string interval)
+    {
+        var weekInterval = new DateTime?[2];
+        var days = interval.Split('-');
+        if (days.Length != 2) return null;
+        for (var i = 0; i < days.Length; i++)
+        {
+            weekInterval[i] = ParseDateTime(days[i]);
+            if (weekInterval[i] is null) return null;
+        }
+
+        return weekInterval;
+    }
+
+    public static bool IsDateBelongsToInterval(DateTime? date, DateTime?[]? interval) => date is not null &&
+        interval is not null && date.Value.Date >= interval?[0]?.Date && date.Value.Date <= interval[1]?.Date;
+
+    public static DateTime? ParseDateTime(string? date, string? format = "dd.MM.yyyy")
+    {
+        if (date is not null && DateTime.TryParseExact(date.Trim(), format, CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var dayTime)) return dayTime;
+        return null;
+    }
+    
+    public static string GetTeachersString(string?[] teachers) => string.Join(", ", teachers);
 }

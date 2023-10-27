@@ -30,28 +30,30 @@ public class DistributionService : IDistributionService
         var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
         var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First();
         if (user is null) return;
-
-        if (user.Teacher is null || !File.Exists($"./cachedImages/{user.Teacher}.png"))
+        foreach (var teacher in user.Teachers)
         {
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
-                "Вы еще не выбрали преподавателя"));
-            return;
+            if (teacher is null || !File.Exists($"./cachedImages/{teacher}.png"))
+            {
+                await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
+                    "Вы еще не выбрали преподавателя"));
+                return;
+            }
+
+            var image = await Image.LoadAsync($"./cachedImages/{teacher}.png");
+
+            if (image is not { })
+            {
+                await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
+                    $"Увы, {teacher} не найден"));
+                return;
+            }
+
+            using var ms = new MemoryStream();
+            await image.SaveAsPngAsync(ms);
+
+            await this._botService.SendPhotoAsync(new SendPhotoArgs(user.UserId,
+                new InputFile(ms.ToArray(), $"Teacher - {user.Teachers}")));
         }
-
-        var image = await Image.LoadAsync($"./cachedImages/{user.Teacher}.png");
-
-        if (image is not { })
-        {
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
-                "Увы, данный преподаватель не найден"));
-            return;
-        }
-
-        using var ms = new MemoryStream();
-        await image.SaveAsPngAsync(ms);
-
-        await this._botService.SendPhotoAsync(new SendPhotoArgs(user.UserId,
-            new InputFile(ms.ToArray(), $"Teacher - {user.Teacher}")));
     }
 
     public async Task SendDayTimetable(User telegramUser)
@@ -64,40 +66,42 @@ public class DistributionService : IDistributionService
     public async Task SendDayTimetable(Models.User? user)
     {
         if (user is null) return;
-
-        if (user.Teacher is null)
+        foreach (var teacher in user.Teachers)
         {
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
-                "Вы еще не выбрали преподавателя"));
-            return;
-        }
-
-        if (ParseService.Timetable.Count < 1)
-        {
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, $"У {user.Teacher} нет пар"));
-            return;
-        }
-
-        foreach (var day in ParseService.Timetable)
-        {
-            var message = string.Empty;
-
-            foreach (var teacherInfo in day.TeacherInfos.Where(teacherInfo => user.Teacher == teacherInfo.Name))
+            if (teacher is null)
             {
-                if (teacherInfo.Lessons.Count < 1)
-                {
-                    message = $"У {teacherInfo.Name} нет пар";
-                    continue;
-                }
-
-                message = $"День - {day.Date}\n" + Utils.CreateDayTimetableMessage(teacherInfo);
+                await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
+                    "Вы еще не выбрали преподавателя"));
+                return;
             }
 
-            await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
-                message.Trim().Length <= 1 ? "У выбранного преподавателя нет пар" : message)
+            if (ParseService.Timetable.Count < 1)
             {
-                ParseMode = ParseMode.Markdown
-            });
+                await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId, $"У {teacher} нет пар"));
+                return;
+            }
+
+            foreach (var day in ParseService.Timetable)
+            {
+                var message = string.Empty;
+
+                foreach (var teacherInfo in day.TeacherInfos.Where(teacherInfo => teacher == teacherInfo.Name))
+                {
+                    if (teacherInfo.Lessons.Count < 1)
+                    {
+                        message = $"У {teacher} нет пар";
+                        continue;
+                    }
+
+                    message = $"День - {day.Date}\n" + Utils.CreateDayTimetableMessage(teacherInfo);
+                }
+
+                await this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
+                    message.Trim().Length <= 1 ? $"У {teacher} нет пар" : message)
+                {
+                    ParseMode = ParseMode.Markdown
+                });
+            }
         }
     }
 }
