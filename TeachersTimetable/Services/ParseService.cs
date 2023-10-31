@@ -317,6 +317,10 @@ public class ParseService : IParseService
                 var image = Image.Load(screenshot.AsByteArray);
                 image.Mutate(x => x.Resize((int)(image.Width / 1.5), (int)(image.Height / 1.5)));
                 await image.SaveAsync($"./cachedImages/{teacher}.png");
+                if (isNewInterval)
+                    foreach (var notificationUser in (await this._mongoService.Database.GetCollection<User>("Users")
+                                 .FindAsync(u => u.Teachers != null && u.Notifications)).ToList())
+                        notificationUserHashSet.Add(notificationUser);
             }
             catch (Exception e)
             {
