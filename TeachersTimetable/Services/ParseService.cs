@@ -256,84 +256,93 @@ public class ParseService : IParseService
         Console.WriteLine("Start week parse");
 
         var (service, options, delay) = this._firefoxService.Create();
-        using (FirefoxDriver driver = new FirefoxDriver(service, options, delay))
+        using FirefoxDriver driver = new FirefoxDriver(service, options, delay);
+        driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
+        var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
+        bool isNewInterval = false;
+        driver.Navigate().GoToUrl(WeekUrl);
+        var element = driver.FindElement(By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div"));
+        wait.Until(d => element.Displayed);
+        Utils.ModifyUnnecessaryElementsOnWebsite(driver);
+        if (element == default) return;
+        var h2 =
+            driver.FindElements(
+                By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/h2"));
+        var h3 =
+            driver.FindElements(
+                By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/h3"));
+        var weekIntervalStr = h3[0].Text;
+        var weekInterval = Utils.ParseDateTimeWeekInterval(weekIntervalStr);
+        if (_weekInterval is null || !string.IsNullOrEmpty(weekIntervalStr) && _weekInterval != weekInterval &&
+            _weekInterval[1] is not null && DateTime.Today == _weekInterval[1])
         {
-            driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
-            var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
+            isNewInterval = _weekInterval is not null;
+            _weekInterval = weekInterval;
+            Console.WriteLine("New interval is " + weekIntervalStr);
+            await this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
+                "New interval is " + weekIntervalStr));
+        }
 
-            driver.Navigate().GoToUrl(WeekUrl);
+        var tempThHeaders =
+            driver.FindElement(
+                    By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div[1]/table/tbody/tr[1]"))
+                .FindElements(By.TagName("th"));
+        _thHeaders = new List<string>();
+        foreach (var thHeader in tempThHeaders)
+        {
+            _thHeaders.Add(new string(thHeader.Text));
+        }
 
-            var element = driver.FindElement(By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div"));
-            wait.Until(d => element.Displayed);
-            Utils.ModifyUnnecessaryElementsOnWebsite(driver);
-
-            if (element == default) return;
-            var h2 =
-                driver.FindElements(
-                    By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/h2"));
-
-            var h3 =
-                driver.FindElements(
-                    By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/h3"));
-            var weekIntervalStr = h3[0].Text;
-            var weekInterval = Utils.ParseDateTimeWeekInterval(weekIntervalStr);
-            if (_weekInterval is null || !string.IsNullOrEmpty(weekIntervalStr) && _weekInterval != weekInterval &&
-                _weekInterval[1] is not null && DateTime.Today == _weekInterval[1])
+        var table = driver.FindElements(By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div"));
+        Utils.HideTeacherElements(driver, h3);
+        Utils.HideTeacherElements(driver, h2);
+        Utils.HideTeacherElements(driver, table);
+        var notificationUserHashSet = new HashSet<User>();
+        for (var i = 0; i < h2.Count; i++)
+        {
+            var teacherH2 = h2[i];
+            var parsedTeacher = string.Empty;
+            var list = new List<IWebElement> { teacherH2, h3[i], table[i] };
+            var teacher = string.Empty;
+            try
             {
-                _weekInterval = weekInterval;
-                Console.WriteLine("New interval is " + weekIntervalStr);
+                Utils.ShowTeacherElements(driver, list);
+                parsedTeacher = teacherH2.Text.Split('-')[1].Trim();
+                teacher = this.Teachers.First(t => t == parsedTeacher);
+                var actions = new Actions(driver);
+                actions.MoveToElement(element).Perform();
+                driver.Manage().Window.Size =
+                    new Size(1920, driver.FindElement(By.ClassName("main")).Size.Height - 30);
+                var screenshot = (driver as ITakesScreenshot).GetScreenshot();
+                var image = Image.Load(screenshot.AsByteArray);
+                image.Mutate(x => x.Resize((int)(image.Width / 1.5), (int)(image.Height / 1.5)));
+                await image.SaveAsync($"./cachedImages/{teacher}.png");
+                if (isNewInterval)
+                    foreach (var notificationUser in (await this._mongoService.Database.GetCollection<User>("Users")
+                                 .FindAsync(u => u.Teachers != null && u.Notifications)).ToList())
+                        notificationUserHashSet.Add(notificationUser);
+            }
+            catch (Exception e)
+            {
+                await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, e.Message));
                 await this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
-                    "New interval is " + weekIntervalStr));
+                    $"Ошибка в преподавателе: {teacher}  (parsed:{parsedTeacher})"));
             }
-
-            var tempThHeaders =
-                driver.FindElement(
-                        By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div[1]/table/tbody/tr[1]"))
-                    .FindElements(By.TagName("th"));
-            _thHeaders = new List<string>();
-            foreach (var thHeader in tempThHeaders)
+            finally
             {
-                _thHeaders.Add(new string(thHeader.Text));
-            }
-
-            var table = driver.FindElements(By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div"));
-            Utils.HideTeacherElements(driver, h3);
-            Utils.HideTeacherElements(driver, h2);
-            Utils.HideTeacherElements(driver, table);
-
-            for (var i = 0; i < h2.Count; i++)
-            {
-                var teacherH2 = h2[i];
-                var parsedTeacher = string.Empty;
-                var list = new List<IWebElement> { teacherH2, h3[i], table[i] };
-                var teacher = string.Empty;
-                try
-                {
-                    Utils.ShowTeacherElements(driver, list);
-                    parsedTeacher = teacherH2.Text.Split('-')[1].Trim();
-                    teacher = this.Teachers.First(t => t == parsedTeacher);
-                    var actions = new Actions(driver);
-                    actions.MoveToElement(element).Perform();
-                    driver.Manage().Window.Size =
-                        new Size(1920, driver.FindElement(By.ClassName("main")).Size.Height - 30);
-                    var screenshot = (driver as ITakesScreenshot).GetScreenshot();
-                    var image = Image.Load(screenshot.AsByteArray);
-                    image.Mutate(x => x.Resize((int)(image.Width / 1.5), (int)(image.Height / 1.5)));
-                    await image.SaveAsync($"./cachedImages/{teacher}.png");
-                }
-                catch (Exception e)
-                {
-                    await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, e.Message));
-                    await this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
-                        $"Ошибка в преподавателе: {teacher}  (parsed:{parsedTeacher})"));
-                }
-                finally
-                {
-                    Utils.HideTeacherElements(driver, list);
-                }
+                Utils.HideTeacherElements(driver, list);
             }
         }
 
+        if (isNewInterval)
+            _ = Task.Run(() =>
+            {
+                foreach (var user in notificationUserHashSet)
+                    _ = this._botService.SendMessageAsync(new SendMessageArgs(user.UserId,
+                        $"У преподавател{(user.Teachers!.Length > 1 ? "ей" : "я")} {Utils.GetTeachersString(user.Teachers)} вышло новое недельное расписание. Нажмите \"Посмотреть расписание на неделю\" для просмотра недельного расписания."));
+                this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
+                    $"{weekIntervalStr}:{notificationUserHashSet.Count} notifications sent"));
+            });
         Console.WriteLine("End week parse");
     }
 

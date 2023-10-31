@@ -10,6 +10,7 @@ namespace TeachersTimetable.Services;
 public interface IDistributionService
 {
     Task SendWeek(User telegramUser);
+    Task SendWeek(Models.User? user);
     Task SendDayTimetable(User telegramUser);
     Task SendDayTimetable(Models.User? user);
 }
@@ -25,10 +26,8 @@ public class DistributionService : IDistributionService
         this._mongoService = mongoService;
     }
 
-    public async Task SendWeek(User telegramUser)
+    public async Task SendWeek(Models.User? user)
     {
-        var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
-        var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First();
         if (user is null) return;
         foreach (var teacher in user.Teachers)
         {
@@ -54,6 +53,13 @@ public class DistributionService : IDistributionService
             await this._botService.SendPhotoAsync(new SendPhotoArgs(user.UserId,
                 new InputFile(ms.ToArray(), $"Teacher - {user.Teachers}")));
         }
+    }
+
+    public async Task SendWeek(User telegramUser)
+    {
+        var userCollection = this._mongoService.Database.GetCollection<Models.User>("Users");
+        var user = (await userCollection.FindAsync(u => u.UserId == telegramUser.Id)).ToList().First();
+        await this.SendWeek(user);
     }
 
     public async Task SendDayTimetable(User telegramUser)
