@@ -400,7 +400,7 @@ public class ParseService : IParseService
                 await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "End parse day"));
             }
 
-            if (parseWeek || parseDay) await SaveState(StatePath);
+            if (parseWeek || parseDay) SaveState(StatePath);
             Console.WriteLine("End update tick");
         }
         catch (Exception e)
@@ -409,7 +409,7 @@ public class ParseService : IParseService
         }
     }
     
-    private Task SaveState(string filePath)
+    private void SaveState(string filePath)
     {
         var stateToSave = new
         {
@@ -422,19 +422,16 @@ public class ParseService : IParseService
 
         string json = JsonConvert.SerializeObject(stateToSave);
         File.WriteAllText(filePath, json);
-        return Task.CompletedTask;
     }
 
     private void LoadState(string filePath)
     {
-        if (File.Exists(filePath))
-        {
-            var state = JsonConvert.DeserializeObject<dynamic>(File.ReadAllText(filePath));
-            _weekInterval = state!.WeekInterval.ToObject<DateTime?[]>();
-            _thHeaders = state.ThHeaders.ToObject<List<string>>();
-            LastDayHtmlContent = state.LastDayHtmlContent;
-            LastWeekHtmlContent = state.LastWeekHtmlContent;
-            Timetable = state.Timetable.ToObject<List<Timetable>>();
-        }
+        if (!File.Exists(filePath)) return;
+        var state = JsonConvert.DeserializeObject<dynamic>(File.ReadAllText(filePath));
+        _weekInterval = state!.WeekInterval.ToObject<DateTime?[]>();
+        _thHeaders = state.ThHeaders.ToObject<List<string>>();
+        LastDayHtmlContent = state.LastDayHtmlContent;
+        LastWeekHtmlContent = state.LastWeekHtmlContent;
+        Timetable = state.Timetable.ToObject<List<Timetable>>();
     }
 }
