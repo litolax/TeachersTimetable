@@ -1,4 +1,5 @@
 ﻿using MongoDB.Driver;
+using Newtonsoft.Json;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Firefox;
 using OpenQA.Selenium.Interactions;
@@ -35,6 +36,7 @@ public class ParseService : IParseService
     private const string DayUrl =
         "https://mgkct.minskedu.gov.by/персоналии/преподавателям/расписание-занятий-на-день";
 
+    private const string StatePath = "last.json";
     private const int DriverTimeout = 2000;
 
     public string[] Teachers { get; init; }
@@ -52,7 +54,7 @@ public class ParseService : IParseService
         this.Teachers = teachers.Entries.Teachers;
         Console.WriteLine("Teachers: " + teachers.Entries.Teachers.Length);
         if (!Directory.Exists("./cachedImages")) Directory.CreateDirectory("./cachedImages");
-
+        LoadState(StatePath);
         var parseTimer = new Timer(1_000_000)
         {
             AutoReset = true, Enabled = true
@@ -398,11 +400,41 @@ public class ParseService : IParseService
                 await this._botService.SendAdminMessageAsync(new SendMessageArgs(0, "End parse day"));
             }
 
+            if (parseWeek || parseDay) await SaveState(StatePath);
             Console.WriteLine("End update tick");
         }
         catch (Exception e)
         {
             Console.WriteLine(e);
+        }
+    }
+    
+    private Task SaveState(string filePath)
+    {
+        var stateToSave = new
+        {
+            WeekInterval = _weekInterval,
+            ThHeaders = _thHeaders,
+            LastDayHtmlContent,
+            LastWeekHtmlContent,
+            Timetable
+        };
+
+        string json = JsonConvert.SerializeObject(stateToSave);
+        File.WriteAllText(filePath, json);
+        return Task.CompletedTask;
+    }
+
+    private void LoadState(string filePath)
+    {
+        if (File.Exists(filePath))
+        {
+            var state = JsonConvert.DeserializeObject<dynamic>(File.ReadAllText(filePath));
+            _weekInterval = state!.WeekInterval.ToObject<DateTime?[]>();
+            _thHeaders = state.ThHeaders.ToObject<List<string>>();
+            LastDayHtmlContent = state.LastDayHtmlContent;
+            LastWeekHtmlContent = state.LastWeekHtmlContent;
+            Timetable = state.Timetable.ToObject<List<Timetable>>();
         }
     }
 }
