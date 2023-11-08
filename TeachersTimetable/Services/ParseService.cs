@@ -285,7 +285,7 @@ public class ParseService : IParseService
                 await this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
                     "New interval is " + weekIntervalStr));
             }
-            else IsNewInterval = true;
+
             isIsNewInterval = !isIsNewInterval && IsNewInterval;
             var tempThHeaders =
                 driver.FindElement(
@@ -294,7 +294,7 @@ public class ParseService : IParseService
             _thHeaders = new List<string>();
             foreach (var thHeader in tempThHeaders) _thHeaders.Add(new string(thHeader.Text));
         }
-        
+
         var table = driver.FindElements(By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div"));
         Utils.HideTeacherElements(driver, h3);
         Utils.HideTeacherElements(driver, h2);
