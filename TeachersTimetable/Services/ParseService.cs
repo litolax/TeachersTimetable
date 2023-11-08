@@ -38,7 +38,7 @@ public class ParseService : IParseService
 
     private const string StatePath = "last.json";
     private const int DriverTimeout = 2000;
-
+    private bool IsNewInterval;
     public string[] Teachers { get; init; }
     public static List<Timetable> Timetable { get; set; } = new();
     private static string LastDayHtmlContent { get; set; }
@@ -256,12 +256,10 @@ public class ParseService : IParseService
     private async Task ParseWeek()
     {
         Console.WriteLine("Start week parse");
-
         var (service, options, delay) = this._firefoxService.Create();
         using FirefoxDriver driver = new FirefoxDriver(service, options, delay);
         driver.Manage().Timeouts().PageLoad.Add(TimeSpan.FromMinutes(2));
         var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(10));
-        bool isNewInterval = false;
         driver.Navigate().GoToUrl(WeekUrl);
         var element = driver.FindElement(By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div"));
         wait.Until(d => element.Displayed);
@@ -275,26 +273,28 @@ public class ParseService : IParseService
                 By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/h3"));
         var weekIntervalStr = h3[0].Text;
         var weekInterval = Utils.ParseDateTimeWeekInterval(weekIntervalStr);
-        if (_weekInterval is null || !string.IsNullOrEmpty(weekIntervalStr) && _weekInterval != weekInterval &&
-            _weekInterval[1] is not null && DateTime.Today == _weekInterval[1])
+        var isIsNewInterval = IsNewInterval;
+        if (_weekInterval is null || !string.IsNullOrEmpty(weekIntervalStr) && _weekInterval != weekInterval)
         {
-            isNewInterval = _weekInterval is not null;
-            _weekInterval = weekInterval;
-            Console.WriteLine("New interval is " + weekIntervalStr);
-            await this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
-                "New interval is " + weekIntervalStr));
+            IsNewInterval = _weekInterval is not null;
+            if (_weekInterval is null || _weekInterval[1] is not null && DateTime.Today == _weekInterval[1])
+            {
+                IsNewInterval = false;
+                _weekInterval = weekInterval;
+                Console.WriteLine("New interval is " + weekIntervalStr);
+                await this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
+                    "New interval is " + weekIntervalStr));
+            }
+            else IsNewInterval = true;
+            isIsNewInterval = !isIsNewInterval && IsNewInterval;
+            var tempThHeaders =
+                driver.FindElement(
+                        By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div[1]/table/tbody/tr[1]"))
+                    .FindElements(By.TagName("th"));
+            _thHeaders = new List<string>();
+            foreach (var thHeader in tempThHeaders) _thHeaders.Add(new string(thHeader.Text));
         }
-
-        var tempThHeaders =
-            driver.FindElement(
-                    By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div[1]/table/tbody/tr[1]"))
-                .FindElements(By.TagName("th"));
-        _thHeaders = new List<string>();
-        foreach (var thHeader in tempThHeaders)
-        {
-            _thHeaders.Add(new string(thHeader.Text));
-        }
-
+        
         var table = driver.FindElements(By.XPath("/html/body/div[1]/div[2]/div/div[2]/div[1]/div/div"));
         Utils.HideTeacherElements(driver, h3);
         Utils.HideTeacherElements(driver, h2);
@@ -319,7 +319,7 @@ public class ParseService : IParseService
                 var image = Image.Load(screenshot.AsByteArray);
                 image.Mutate(x => x.Resize((int)(image.Width / 1.5), (int)(image.Height / 1.5)));
                 await image.SaveAsync($"./cachedImages/{teacher}.png");
-                if (isNewInterval)
+                if (IsNewInterval)
                     foreach (var notificationUser in (await this._mongoService.Database.GetCollection<User>("Users")
                                  .FindAsync(u => u.Teachers != null && u.Notifications)).ToList())
                         notificationUserHashSet.Add(notificationUser);
@@ -336,7 +336,7 @@ public class ParseService : IParseService
             }
         }
 
-        if (isNewInterval)
+        if (isIsNewInterval)
             _ = Task.Run(() =>
             {
                 foreach (var user in notificationUserHashSet)
@@ -408,7 +408,7 @@ public class ParseService : IParseService
             Console.WriteLine(e);
         }
     }
-    
+
     private void SaveState(string filePath)
     {
         var stateToSave = new
