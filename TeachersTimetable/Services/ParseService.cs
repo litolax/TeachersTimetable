@@ -125,9 +125,9 @@ public class ParseService : IParseService
                     var teacherInfo = new TeacherInfo();
                     var lessons = new List<Lesson>();
                     var lessonsElements =
-                        teachersAndLessons[i].FindElements(By.XPath(".//table/tbody/tr")).ToList();
+                        teachersAndLessons[i].FindElements(By.XPath(".//table/tbody/tr | .//p")).ToList();
 
-                    if (lessonsElements.Count < 1)
+                    if (lessonsElements.Count < 1 || lessonsElements[0].TagName == "p")
                     {
                         teacherInfo.Lessons = lessons;
                         teacherInfo.Name = teacher;
