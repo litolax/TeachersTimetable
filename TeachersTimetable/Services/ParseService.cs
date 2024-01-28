@@ -168,7 +168,7 @@ public class ParseService : IParseService
             }
             finally
             {
-                driver.Dispose();
+                driver.Quit();
             }
         }
 
@@ -391,7 +391,7 @@ public class ParseService : IParseService
                     LastWeekHtmlContent = content.Text;
                 }
                 
-                driver.Dispose();
+                driver.Quit();
             }
 
             if (parseWeek)
