@@ -4,6 +4,8 @@ using OpenQA.Selenium;
 using OpenQA.Selenium.Firefox;
 using OpenQA.Selenium.Interactions;
 using OpenQA.Selenium.Support.UI;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
 using TeachersTimetable.Config;
 using TeachersTimetable.Models;
 using Telegram.BotAPI.AvailableMethods;
