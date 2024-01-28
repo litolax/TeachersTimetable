@@ -166,6 +166,10 @@ public class ParseService : IParseService
                 _ = this._botService.SendAdminMessageAsync(new SendMessageArgs(0,
                     "Ошибка дневного расписания у преподавателя: " + teacher));
             }
+            finally
+            {
+                driver.Dispose();
+            }
         }
 
         var notificationUsersHashSet = new HashSet<User>();
@@ -386,6 +390,8 @@ public class ParseService : IParseService
                     parseWeek = true;
                     LastWeekHtmlContent = content.Text;
                 }
+                
+                driver.Dispose();
             }
 
             if (parseWeek)
